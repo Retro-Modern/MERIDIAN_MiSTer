@@ -1,0 +1,13 @@
+; Automatisch erzeugt von basic/bauen.sh
+B_ROMLOC = $2000
+B_RAMLOC = $4800
+B_INIT = $3f9e
+B_START = $0055
+B_READY = $234b
+B_BUF = $0310
+B_BASIC_ENDE = $479c
+B_DATENBANK = $0001
+B_LAENGE = $279c
+B_ERW = $b800
+B_ERW_ROM = $2800
+B_ERW_LAENGE = $069c

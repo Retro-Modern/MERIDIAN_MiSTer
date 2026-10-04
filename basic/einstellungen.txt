@@ -1,0 +1,15 @@
+# MERIDIAN BASIC: Schalter fuer die Uebersetzung der Microsoft-Quelle
+# (Apple-Variante als Grundlage: ganze Eingabezeilen ueber eine Systemroutine)
+REALIO = 4
+LNGERR = 1          # lange Fehlermeldungen (?SYNTAX ERROR)
+ROMSW = 1           # Code getrennt vom Programmspeicher
+LINLEN = 40
+BUFLEN = 80
+BUFPAG = 3          # Eingabepuffer in Seite 3 (Seite 2 gehoert dem Kern)
+BUF = 0x0310        # hinter dem Interrupt-Haken des Kerns ($0300)
+ROMLOC = 0x2000     # BASIC-Code (beim Start aus dem BASIC-ROM kopiert, Bank 0 und 1), bis $47FF
+RAMLOC = 0x4800     # Programmspeicher in Bank 1 (Datenbank), bis $FFFF
+# Zeropage: der Kern belegt $10-$54
+ORG 0 = 0x55
+ORG 80 = weg
+DISKO = 1           # LOAD und SAVE (MERIDIAN: Zusatzspeicher)

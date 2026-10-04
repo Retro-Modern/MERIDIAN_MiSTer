@@ -1,0 +1,11 @@
+# Quartus
+db/
+incremental_db/
+output_files/
+build_id.v
+*.qws
+# Simulation und erzeugte Listings
+sim/obj_dir/
+sim/out*/
+*.lst
+__pycache__/
