@@ -25,7 +25,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | Sprites (KOBOLD) | 32 sprites of 16×16 (or 32×32 doubled), 16 colours, no per-line limit, collision detection |
 | Sound (ORGEL) | 4 synth voices (ADSR, filter) + 4 sample channels, stereo |
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
-| Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB |
+| Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card as drive 3 |
 | Network (DRAHT) | TCP, HTTP(S), file download and disk creation from BASIC, served by a small Python service on the MiSTer |
 | Video | 15.7 kHz, NTSC 60 Hz or PAL 50 Hz |
 
@@ -60,7 +60,8 @@ with programs and variables in their own 64 KB bank. MERIDIAN adds:
   plays in the background, like `PLAY "T150 O5 L8 CEGEC<G>CE !"`)
 - **Input:** `MOUSE`, `MOUSE(n)` `JOY(n)` `KEY(c)` `HIT(n)` `CLOCK(n)`
 - **Drives:** `DIR` `LOAD`/`SAVE "name"` `BLOAD` `BSAVE` `SCRATCH`
-  `HEADER` `DRIVE`
+  `HEADER` `DRIVE` (drives 1 and 2 are the OSD disks, `DRIVE 3` is the
+  folder `games/MERIDIAN/files`, see below)
 - **Network:** `NET "command"`, `NET(k)`, `NET$(k)`
 - **Program flow:** `IF … THEN … ELSE`, `WHILE … WEND`, `REPEAT … UNTIL`,
   `RENUMBER [new[,step[,from]]]`
@@ -83,10 +84,11 @@ C64's SMON:
 - Also: `F` fill, `T` transfer, `C` compare, `H` hunt, `L`/`S` load and save,
   `DIR`, `$ # %` to convert numbers. `?` lists everything.
 
-## Network (optional)
+## Network and folder drive (optional)
 
 `tools/draht.py` is a small Python service for the MiSTer's Linux side. It
-answers the BASIC `NET` commands through a shared window in the DDR3 memory.
+answers the BASIC `NET` commands through a shared window in the DDR3 memory,
+and it serves the folder `/media/fat/games/MERIDIAN/files` as **drive 3**.
 To install it:
 
 1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
@@ -110,6 +112,21 @@ NET "GET wttr.in/Berlin?format=3":PRINT NET$(0):PRINT NET$(0)
 
 `NET "HELP"` lists the commands: `CONNECT`, `LISTEN`, `SEND`, `CLOSE`,
 `GET`, `FETCH`, `DISK`, `FILES`.
+
+**Drive 3** is the easy way to move files between the MERIDIAN and a
+computer: copy them into `games/MERIDIAN/files` (card reader, network share,
+FTP), and `DRIVE 3` / `DIR` shows them right away – no disk image, no
+re-inserting in the OSD. Whatever the MERIDIAN saves there is a plain file
+on the SD card. Long names appear as 8.3 aliases (`Space Debris.mod` →
+`SPACED~1.MOD`; type `~` with AltGr + `+`). The service creates the folder
+when it starts.
+
+```basic
+DRIVE 3
+DIR
+BSAVE "BUFFER",2097152,1024
+BLOAD "BUFFER"
+```
 
 ## Example programs
 

@@ -22,6 +22,11 @@ Befehle aus BASIC: NET "befehl"[,kanal]
 NET(0) Status des letzten Befehls, NET(k) wartende Zeilen (0 keine,
 -1 keine Verbindung, -2 wartet auf Verbindung); NET$(0) Meldungen,
 NET$(k) naechste Zeile von Kanal k.
+
+Laufwerk 3 (Etappe 14): der Ordner games/MERIDIAN/files als Laufwerk des
+DOS. Anfragen 4-8 (Eintrag, Lesen, Schreiben, Entfernen, Frei), die Daten
+stueckweise im Fenster ab $1000. Lange Dateinamen bekommen ein 8.3-Kuerzel
+(SPACED~1.MOD); Antwort-Status = Fehlernummer des DOS.
 """
 import argparse
 import collections
@@ -44,6 +49,8 @@ HIER = os.path.dirname(os.path.abspath(__file__))
 # Fenster
 ANR, ANTW, ART, KANAL, LEN, STATUS, ALEN, HERZ = 0, 1, 2, 3, 4, 6, 8, 0x10
 TEXT, ANTWORT = 0x100, 0x200
+DATEN, STUECK = 0x1000, 0xF000      # Laufwerk 3: Daten im Fenster
+D_GUT, D_UNGUELTIG, D_FEHLT, D_VOLL, D_SCHUTZ = 0, 1, 2, 3, 6
 
 
 # Typografische Zeichen, die oft vorkommen
@@ -128,6 +135,8 @@ class Dienst:
         self.pruef_zeit = 0.0
         self.postfach = postfach
         self.ordner = ordner
+        self.dateien = os.path.join(ordner, "files")    # Laufwerk 3
+        os.makedirs(self.dateien, exist_ok=True)
         self.kanaele = [None] + [Kanal() for _ in range(4)]
         self.meldungen = collections.deque(maxlen=200)
         self.status = 0
@@ -196,6 +205,13 @@ class Dienst:
             self.antworten(nr, len(q), zeile)
         elif art == 3:
             self.antworten(nr, self.status if k == 0 else self.kanaele[k].zustand())
+        elif 4 <= art <= 8:
+            try:
+                status, antwort = self.laufwerk(art, bytes(m[TEXT:TEXT + 17]))
+            except Exception as e:
+                print("Laufwerk 3:", e, flush=True)
+                status, antwort = D_UNGUELTIG, b""
+            self.antworten(nr, status, antwort)
         else:
             self.antworten(nr, -6, b"BAD REQUEST")
 
@@ -262,6 +278,85 @@ class Dienst:
                 self.meldungen.append(zu_meridian(z))
             return 0, "COMMANDS (READ THEM WITH NET$(0)):"
         return -6, "UNKNOWN COMMAND " + wort
+
+    # -------------------------------------------------- Laufwerk 3
+    def verzeichnis(self):
+        """[(Kurzname, Endung, Dateiname)], sortiert; 8.3-Kuerzel wie NAME~1"""
+        namen = sorted((n for n in os.listdir(self.dateien)
+                        if not n.startswith(".") and os.path.isfile(os.path.join(self.dateien, n))),
+                       key=str.upper)
+
+        def zeichen(t):
+            return "".join(c for c in t.upper() if (c.isascii() and c.isalnum()) or c in "_-")
+
+        liste, belegt = [], set()
+        for n in namen:
+            stamm, punkt, end = n.rpartition(".")
+            if not punkt:
+                stamm, end = n, ""
+            s, e = zeichen(stamm) or "DATEI", zeichen(end)[:3]
+            if len(s) <= 8 and s == stamm.upper() and e == end.upper() and (s, e) not in belegt:
+                kurz = s
+            else:
+                for k in range(1, 1000):
+                    kurz = s[:7 - len(str(k))] + "~" + str(k)
+                    if (kurz, e) not in belegt:
+                        break
+            belegt.add((kurz, e))
+            liste.append((kurz, e, n))
+        return liste
+
+    def suchen(self, name83):
+        name, end = name83[:8].decode("latin-1").strip(), name83[8:11].decode("latin-1").strip()
+        for kurz, e, n in self.verzeichnis():
+            if kurz == name and e == end:
+                return os.path.join(self.dateien, n), name, end
+        return None, name, end
+
+    def laufwerk(self, art, text):
+        if art == 4:                                    # Eintrag Nummer i
+            i = struct.unpack("<H", text[:2])[0]
+            liste = self.verzeichnis()
+            if i >= len(liste):
+                return D_FEHLT, b""
+            kurz, e, n = liste[i]
+            name = (kurz + ("." + e if e else "")).encode("latin-1")
+            groesse = min(os.path.getsize(os.path.join(self.dateien, n)), 0xFFFFFFFF)
+            return D_GUT, struct.pack("<HIB", i + 1, groesse, len(name)) + name
+        if art == 8:                                    # freie Bytes
+            st = os.statvfs(self.dateien)
+            return D_GUT, struct.pack("<I", min(st.f_bavail * st.f_frsize, 99999999))   # DIR: 8 Stellen
+        pfad, name, end = self.suchen(text[:11])
+        versatz, laenge = struct.unpack("<IH", text[11:17])
+        if art == 5:                                    # lesen
+            if not pfad:
+                return D_FEHLT, b""
+            daten = open(pfad, "rb").read()
+            mer, adr = 0, b"\0\0\0"
+            if daten[:4] == b"MER\x01" and len(daten) >= 16:
+                mer, adr, daten = 1, daten[4:7], daten[16:]
+            stueck = daten[versatz:versatz + min(laenge, STUECK)]
+            self.m[DATEN:DATEN + len(stueck)] = stueck
+            return D_GUT, struct.pack("<IHB", len(daten), len(stueck), mer) + adr
+        if art == 6:                                    # schreiben (Versatz 0: neu)
+            if not pfad:
+                pfad = os.path.join(self.dateien, name + ("." + end if end else ""))
+            try:
+                with open(pfad, "r+b" if versatz else "wb") as f:
+                    f.seek(versatz)
+                    f.write(bytes(self.m[DATEN:DATEN + min(laenge, STUECK)]))
+                    f.flush()
+                    os.fsync(f.fileno())
+            except OSError as e:
+                print("schreiben:", e, flush=True)
+                return {28: D_VOLL, 30: D_SCHUTZ, 13: D_SCHUTZ}.get(e.errno, D_UNGUELTIG), b""
+            return D_GUT, b""
+        if art == 7:                                    # entfernen
+            if not pfad:
+                return D_FEHLT, b""
+            os.remove(pfad)
+            return D_GUT, b""
+        return D_UNGUELTIG, b""
 
     def oeffnen(self, url):
         if "://" not in url:

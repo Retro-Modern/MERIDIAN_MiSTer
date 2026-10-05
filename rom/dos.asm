@@ -16,6 +16,8 @@
 ;   1 SICHERN    D_LAENGE Bytes ab D_ADR als Datei D_TEXT; D_MER = 1:
 ;                mit MER-Kopf (Ladeadresse D_ADR)
 ;   2 ENTFERNEN  Datei D_TEXT
+;  (Laufwerk 3 ist ein Ordner auf der SD-Karte ueber den Netzdienst,
+;  rom/ordner.asm - dort gibt es kein LEEREN und keine Bloecke)
 ;   3 EINTRAG    naechste Datei ab D_INDEX: Name in D_TEXT, Groesse in
 ;                D_LAENGE; Fehler 2 = keine weitere
 ;   4 FREI       freie Bytes nach D_LAENGE (4 Byte)
@@ -170,7 +172,12 @@ dos_befehl
 +	asl a
 	tax
 	#akku8
+	lda D_LW                    ; Laufwerk 3: der Ordner (ordner.asm)
+	cmp #3
+	beq +
 	jsr (befehle,x)
+	bra _ende
++	jsr (o_befehle,x)
 _ende
 	.as
 	sta D_FEHLER
@@ -719,6 +726,8 @@ _sonder
 	cmp #'_'
 	beq _gut
 	cmp #'-'
+	beq _gut
+	cmp #'~'                    ; Kuerzel langer Namen (Laufwerk 3)
 	beq _gut
 	bra _f
 _gut
@@ -2021,6 +2030,7 @@ P_TPTR_M   = $039D
 
 	.include "musik.asm"
 	.include "netz.asm"
+	.include "ordner.asm"
 	.include "monitor.asm"
 
 	.cerror * > $8000, "DOS-ROM zu gross"

@@ -354,12 +354,13 @@ schreibt Status und Antworttext und zuletzt die Antwort-Nummer.
 | `$FD:` | |
 |---|---|
 | `$00` / `$01` | Anfrage-Nr (MERIDIAN) / Antwort-Nr (Dienst) |
-| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand |
+| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand, 4–8 Laufwerk 3 (siehe DOS) |
 | `$03` / `$04` | Kanal 0–4 / Länge der Anfrage |
 | `$06/$07` | Status (16 Bit mit Vorzeichen) |
 | `$08` | Länge der Antwort |
 | `$10` | Herzschlag des Dienstes (zählt alle 50 ms) |
 | `$100` / `$200` | Anfragetext / Antworttext (je bis 255 Zeichen) |
+| `$1000–$FFFF` | Dateidaten für Laufwerk 3 (bis 60 KB je Anfrage, Etappe 14) |
 
 Der MERIDIAN-Teil liegt im ROM von Bank `$FF` (`rom/netz.asm`, `$FF4009`):
 Er wartet höchstens 20 s (Befehle) bzw. 3 s, Esc bricht ab; antwortet der
@@ -414,7 +415,7 @@ Sektoren mit einem Auftrag, `LEEREN` schreibt die Nullen ebenso gebündelt.
 
 | Adresse | Name | |
 |---|---|---|
-| `$16C0` | D_LW | Laufwerk 0–2 |
+| `$16C0` | D_LW | Laufwerk 0–2, 3 = Ordner (Etappe 14) |
 | `$16C1` | D_FEHLER | letzter Fehler |
 | `$16C2` | D_MER | SICHERN: 1 = mit MER-Kopf |
 | `$16C3` | D_ENDUNG | 3 Zeichen, wenn der Name keine Endung hat |
@@ -436,9 +437,24 @@ Sektoren mit einem Auftrag, `LEEREN` schreibt die Nullen ebenso gebündelt.
 | 6 | BLOCK LESEN | Block D_BLOCK roh nach D_ADR (512 Byte, ohne Dateisystem) |
 | 7 | BLOCK SCHREIBEN | 512 Byte ab D_ADR als Block D_BLOCK |
 
-**Fehler:** 1 ungültig, 2 nicht gefunden, 3 voll, 4 kein Image, 5 kein
-FAT16, 6 schreibgeschützt, 7 Verzeichnis voll, 8 zu groß, 9 Name nicht 8.3
-(erlaubt: A–Z, 0–9, `_`, `-`).
+**Fehler:** 1 ungültig, 2 nicht gefunden, 3 voll, 4 kein Image (Laufwerk
+3: kein Dienst), 5 kein FAT16, 6 schreibgeschützt, 7 Verzeichnis voll, 8 zu
+groß, 9 Name nicht 8.3 (erlaubt: A–Z, 0–9, `_`, `-`, `~`).
+
+**Laufwerk 3 – der Ordner `files`** (Etappe 14): Der Netzdienst (DRAHT)
+stellt den Ordner `games/MERIDIAN/files` der SD-Karte als Laufwerk bereit.
+Was dort liegt – per SD-Kartenleser, Netzwerkfreigabe oder FTP
+hineinkopiert –, sieht der MERIDIAN sofort, und was er sichert, ist am
+Rechner sofort nutzbar: kein Image, kein Einhängen, kein Neu-Einlegen im
+Menü. Das DOS reicht LADEN, SICHERN, ENTFERNEN, EINTRAG und FREI für
+Laufwerk 3 an `rom/ordner.asm` weiter, das den Dienst über das Fenster
+fragt (Art 4–8); die Daten laufen in Stücken bis 60 KB durch `$FD:1000`.
+Lange Dateinamen zeigt der Dienst als 8.3-Kürzel (`Space Debris.mod` →
+`SPACED~1.MOD`), Groß- und Kleinschreibung spielt keine Rolle. MER-Dateien
+liefert er ohne Kopf, mit der Ladeadresse, wie das DOS sonst. Freie Bytes
+meldet er höchstens als 99.999.999 (`DIR` zeigt acht Stellen). LEEREN und
+die Blockbefehle gibt es auf Laufwerk 3 nicht (Fehler 1). Läuft der Dienst
+nicht, kommt nach 10 s Fehler 4.
 
 Datum der Einträge: aus der Uhr von PFORTE (seit Etappe 11); ist sie nicht
 gestellt, der 1. Januar 2026.
@@ -810,7 +826,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `BSAVE "name",adr,länge[,lw]` | Speicher als MER-Datei sichern (24-Bit-Adressen) |
 | `SCRATCH "name"[,lw]` | Datei löschen (Endung `.BAS`, wenn keine angegeben) |
 | `HEADER "name"[,lw]` | Diskette neu anlegen – alles darauf ist weg |
-| `DRIVE n` | Laufwerk für Befehle ohne `lw` (Vorgabe 1) |
+| `DRIVE n` | Laufwerk für Befehle ohne `lw` (0–3, Vorgabe 1; 3 = Ordner `files`) |
 | `MONITOR` | in den Maschinensprache-Monitor (zurück mit `BASIC`) |
 | `BLIT von,nach,länge` | Block kopieren mit KRAN, 24-Bit-Adressen, auch Zusatzspeicher und überlappend |
 | `STAMP adr,x,y,b,h` | Bild (b×h Bytes, Farbe 0 durchsichtig) von adr – auch aus dem Zusatzspeicher – in die Grafik |
@@ -1008,6 +1024,10 @@ mit den neuen Namen.
     Vergleichen, Laden/Speichern, Zahlenumrechnung und Einzelschritt mit
     Hardwarehilfe (SYSTEM Bit 1); Selbsttest MONTEST, Vorführung GUESS;
     dazu `RENUMBER`.
+14. Ein Ordner als Laufwerk ✔ (Simulation und Hardware, 05.10.2026): Der
+    Netzdienst stellt `games/MERIDIAN/files` als Laufwerk 3 bereit
+    (`rom/ordner.asm`, `DRIVE 3`) – Dateien vom Rechner ohne Image hinein
+    und heraus.
 
 **Ausblick** (die Ideensammlung dazu):
 

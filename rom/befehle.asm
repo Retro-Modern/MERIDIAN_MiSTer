@@ -1118,7 +1118,7 @@ d_laufwerk
 	cmp #1
 	bne _f
 	lda P_WERT
-	cmp #3
+	cmp #4                      ; 0-2 Images, 3 der Ordner (Netzdienst)
 	bcs _f
 	lda P_WERT+1
 	ora P_WERT+2
