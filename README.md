@@ -142,6 +142,7 @@ files. The file names are German.
   them.
 - **Simulation:** Verilator. Run `make` in `sim/`, then
   `./obj_dir/meridian_sim <seconds> <outdir> 0 <frames…>`.
+  `sim/nmi_test` tests the CPU core alone (NMI during IRQ entry).
 - **Your own programs:** `programme/bauen.sh name` assembles to a `.MER`.
   `tools/bas.py` turns BASIC text into `.BAS`, and `tools/disk.py` creates and
   fills FAT16 disk images on a PC or Mac.
@@ -152,8 +153,9 @@ Source comments, scripts and the documentation are in German.
 
 - **CPU:** P65C816 by **srg320** (from
   [SNES_MiSTer](https://github.com/MiSTer-devel/SNES_MiSTer)), in the
-  SystemVerilog translation by **Alan Steremberg** (Apple IIgs core), with two
-  fixes for MERIDIAN. See `rtl/cpu65c816/`. GPL-3.0.
+  SystemVerilog translation by **Alan Steremberg** (Apple IIgs core), with
+  three fixes for MERIDIAN (interrupt handling, see
+  `rtl/cpu65c816/README.md`). GPL-3.0.
 - **BASIC:** Microsoft BASIC M6502 1.1, © Microsoft Corporation, MIT license
   (`basic/quelle/`).
 - **MiSTer framework** (`sys/`): GPL-2.0.

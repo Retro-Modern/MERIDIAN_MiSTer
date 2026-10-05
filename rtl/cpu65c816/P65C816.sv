@@ -742,7 +742,11 @@ module P65C816
             // MERIDIAN-Korrektur 03.10.2026: erst loeschen, wenn der NMI auch
             // angenommen wird (NMI_ACTIVE ist hier ein Register und hinkt einen
             // Zyklus nach). Vorher ging ein NMI kurz vor einem Befehlsende verloren.
-            else if (LAST_CYCLE == 1'b1 && NMI_SYNC == 1'b1 && EN == 1'b1 && NMI_ACTIVE == 1'b1)
+            // Nachtrag 05.10.2026: nicht am Ende eines Interrupt-Eintritts
+            // (GotInterrupt = 1) - dort wird er nicht angenommen. Kam der NMI,
+            // waehrend die CPU gerade einen IRQ annahm, war er sonst weg.
+            else if (LAST_CYCLE == 1'b1 && NMI_SYNC == 1'b1 && EN == 1'b1 && NMI_ACTIVE == 1'b1
+                     && GotInterrupt == 1'b0)
                NMI_SYNC <= 1'b0;
          end
       end

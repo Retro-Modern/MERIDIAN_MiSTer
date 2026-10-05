@@ -9,7 +9,9 @@
 // MERIDIAN_TIPPEN="text" tippt ab Bild MERIDIAN_TIPP_AB (Standard 50) mit
 // deutschem PS/2-Layout. Zeilenumbruch oder \n = Return, Sondertasten in
 // geschweiften Klammern: {HOCH} {RUNTER} {LINKS} {RECHTS} {POS1} {ENTF}
-// {RUECK} {CLR} {EINFG} {ESC} {STRG1}..{STRG9}.
+// {RUECK} {CLR} {EINFG} {ESC} {STRG1}..{STRG9}, {F1}..{F12} {TAB} {BILDHOCH}
+// {BILDRUNTER} {ENDE}, {WARTE} (eine halbe Sekunde); Vorsatz U: haelt
+// Umschalt, S: Strg (z. B. {U:HOCH}, {S:RECHTS}, {S:C}).
 //
 // MERIDIAN_MENUE=datei.mer laedt ab Bild MERIDIAN_MENUE_AB (Standard 60)
 // wie aus dem MiSTer-Menue (ioctl): ein Byte alle MERIDIAN_MENUE_ABSTAND
@@ -109,6 +111,19 @@ static std::deque<Taste> tipp_folge(const char* text) {
         if (*p == '{') {
             const char* e = strchr(p, '}');
             std::string w(p + 1, e - p - 1);
+            int um = 0, st = 0;                 // Vorsaetze U: (Umschalt) und S: (Strg)
+            while (w.size() > 2 && w[1] == ':') {
+                if (w[0] == 'U') um = 1; else if (w[0] == 'S') st = 1;
+                w = w.substr(2);
+            }
+            static const struct { const char* n; int code, e0; } fx[] = {
+                {"F1", 0x05, 0}, {"F2", 0x06, 0}, {"F3", 0x04, 0}, {"F4", 0x0C, 0}, {"F5", 0x03, 0},
+                {"F6", 0x0B, 0}, {"F7", 0x83, 0}, {"F8", 0x0A, 0}, {"F9", 0x01, 0}, {"F10", 0x09, 0},
+                {"F11", 0x78, 0}, {"F12", 0x07, 0}, {"TAB", 0x0D, 0}, {"BILDHOCH", 0x7D, 1},
+                {"BILDRUNTER", 0x7A, 1}, {"ENDE", 0x69, 1}, {"RETURN", 0x5A, 0}, {"WARTE", -1, 0}};
+            bool gefunden = false;
+            for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st}; gefunden = true; }
+            if (gefunden) { f.push_back(t); p = e; continue; }
             t = {0, 1, 0, 0};
             if (w == "HOCH") t.code = 0x75; else if (w == "RUNTER") t.code = 0x72;
             else if (w == "LINKS") t.code = 0x6B; else if (w == "RECHTS") t.code = 0x74;
@@ -118,6 +133,8 @@ static std::deque<Taste> tipp_folge(const char* text) {
             else if (w == "RUECK") { t = {0x66, 0, 0, 0}; }
             else if (w == "ESC") { t = {0x76, 0, 0, 0}; }
             else if (w.rfind("STRG", 0) == 0) { zeichen_taste(w[4], t); t.strg = 1; }
+            if (um) t.umsch = 1;
+            if (st) t.strg = 1;
             f.push_back(t);
             p = e;
             continue;
@@ -264,6 +281,7 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> senden;
     size_t naechste = 0;
     int senden_ab = getenv("MERIDIAN_SENDEN_AB") ? atoi(getenv("MERIDIAN_SENDEN_AB")) : 60;
+    int senden_abstand = getenv("MERIDIAN_SENDEN_ABSTAND") ? atoi(getenv("MERIDIAN_SENDEN_ABSTAND")) : 12;
     int nochmal_ab = getenv("MERIDIAN_SENDEN_NOCHMAL") ? atoi(getenv("MERIDIAN_SENDEN_NOCHMAL")) : -1;
     bool gesendet = false;
     std::deque<std::pair<uint64_t, uint32_t>> ddr_antworten;   // (Takt, Wortadresse)
@@ -347,6 +365,7 @@ int main(int argc, char** argv) {
             const uint64_t MS = getenv("MERIDIAN_TIPP_MS") ? atoi(getenv("MERIDIAN_TIPP_MS")) : 30;
             const uint64_t H = TAKT * MS / 1000;   // halten, dann Pause
             for (auto& k : tippen) {
+                if (k.code < 0) { z += TAKT / 2; continue; }   // {WARTE}: eine halbe Sekunde
                 if (k.umsch) { ereignisse.push_back({z, 0x12, 0, 1}); z += H / 2; }
                 if (k.strg)  { ereignisse.push_back({z, 0x14, 0, 1}); z += H / 2; }
                 ereignisse.push_back({z, k.code, k.e0, 1}); z += H;
@@ -394,7 +413,7 @@ int main(int argc, char** argv) {
         }
 
         // Programm ins Postfach legen: Daten, Kopf, zuletzt die Folgenummer
-        if (naechste < sendungen.size() && frame == senden_ab + (int)naechste * 12) {
+        if (naechste < sendungen.size() && frame == senden_ab + (int)naechste * senden_abstand) {
             senden = sendungen[naechste++];
             if (ddr.size() < senden.size() + 64) ddr.resize(senden.size() + 64, 0);
             for (size_t i = 16; i < senden.size(); i++) ddr[24 + i - 16] = senden[i];
@@ -403,10 +422,11 @@ int main(int argc, char** argv) {
             gesendet = true;
             printf("Bild %d: Datei %zu ins Postfach gelegt (%zu Bytes)\n", frame, naechste, senden.size() - 16);
         }
-        if (gesendet && frame == nochmal_ab) {           // noch einmal, waehrend es laeuft
-            ddr[0]++;
+        if (gesendet && frame == nochmal_ab) {           // noch einmal, waehrend es laeuft:
+            naechste = 0;                                // alle Dateien wie beim ersten Mal
+            senden_ab = frame + 1;
             nochmal_ab = -1;
-            printf("Bild %d: Programm erneut geschickt\n", frame);
+            printf("Bild %d: Dateien werden erneut geschickt\n", frame);
         }
 
         // Laufwerke: Images anmelden (Bild 3), dann Auftraege beantworten

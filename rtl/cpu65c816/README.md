@@ -29,6 +29,18 @@ Author:   srg320 — https://github.com/srg320
 - Assorted fixes found while running the Apple IIgs ROM self-tests and
   the 65C816 instruction-level test suites.
 
+## Changes for MERIDIAN 816
+
+- `WAI` woke up on `IRQ_N == 1` instead of `0` (translation slip), so with
+  an interrupt pending it waited forever.
+- A pending NMI (`NMI_SYNC`) was cleared at the next instruction end,
+  although acceptance runs through `NMI_ACTIVE`, one cycle later. An NMI
+  shortly before an instruction end got lost.
+- 2026-10-05: it was also cleared at the end of an interrupt entry, where
+  the NMI is not taken. An NMI that arrived while the CPU was taking an IRQ
+  got lost. `sim/nmi_test` in the MERIDIAN repository checks this: IRQ held
+  low, NMI at 40 different cycles – 20 lost before the fix, none after.
+
 ## Files
 
 | File | Role |
