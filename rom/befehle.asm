@@ -575,7 +575,7 @@ _nein
 	rts
 
 ;----------------------------------------------------------------------------
-; SAMPLE k[, adr, laenge[, hz[, laut[, schleife]]]] - Samplekanal k (0-3)
+; SAMPLE k[, adr, laenge[, hz[, laut[, schleife]]]] - Samplekanal k (0-7)
 ; spielt laenge Bytes ab adr (8 Bit mit Vorzeichen) mit hz (Vorgabe 22050),
 ; laut 0-63 (Vorgabe 63), schleife <> 0: immer wieder. Seit Etappe 15
 ; spielt die ORGEL auch direkt aus dem Zusatzspeicher (bis 16 MB lang).
@@ -584,13 +584,16 @@ sample
 	.as
 	#akku16
 	#wert_lo 0
-	cmp #4
+	cmp #8                      ; Kanal 0-7 (4-7 seit Etappe 17, ab $CC80)
 	bcs _f
 	asl a
 	asl a
 	asl a
 	asl a
-	tax                         ; X = k * 16
+	cmp #$40
+	bcc +
+	adc #$6c0-1                 ; (C = 1) Kanal 4-7: k * 16 + $6C0
++	tax                         ; X = Versatz ab ORG_KANAL
 	#akku8
 	stz ORG_KANAL+$b,x          ; anhalten
 	lda P_ANZ

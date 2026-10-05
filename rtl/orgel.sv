@@ -37,6 +37,10 @@
 //    $43     Bit 4 Tief, 5 Band, 6 Hoch; Bits 0-3 Gesamtlautstaerke
 //    $44     SAMPLEPEGEL n (0-15): die vier Samplekanaele mal n/4 (Etappe 15;
 //            nach dem Einschalten 4 = wie eine Stimme)
+//   Echo ab $50 (Etappe 16; mono, 31,25 kHz, 16 Bit im Zusatzspeicher):
+//    $50/$51 ZEIT in Abtastwerten zu 32 us (1-32767, gut eine Sekunde)
+//    $52 RUECK 0-15 (Rueckkopplung n/16)  $53 ANTEIL 0-15 (n/16)
+//    $54 BANK: Puffer 64 KB ab Bank:0000 im Zusatzspeicher, 0 = Echo aus
 //   Samplekanal k = 0..3 ab $80 + k*$10:
 //    +0..+2 START  +3/+4 LAENGE  +5/+6 SCHLEIFE (Ruecksprung, ab Start)
 //    +E / +F      LAENGE / SCHLEIFE Bits 16-23 (Etappe 15); +3 bzw. +5
@@ -46,6 +50,14 @@
 //                 startet von vorn, mit Bit 0 = 0 haelt an.
 //                 Lesen: Bit 0 = spielt noch
 //    +C/+D        lesen: Position im Sample (+E: Bits 16-23)
+//   Samplekanaele 4-7 (Etappe 17) liegen mit denselben Versaetzen in einer
+//   zweiten Seite (Eingang reg_seite, im MERIDIAN $CC00): $CC80 + k*$10 ist
+//   Kanal 4+k, $CCC0 + k*$10 seine Effekte; sonst ist diese Seite leer.
+//   Effekte je Samplekanal k ab $C0 + k*$10 (Etappe 16), Kette Crusher ->
+//   Verzerrung -> Lautstaerke/Panorama:
+//    +0 BITS 1-7 (0 = alle 8)   +1 RATE: jeden Wert n us halten (0 = aus)
+//    +2 VERZERRUNG 0-15         +3 ECHO-ANTEIL des Kanals 0-15
+//    +4 Bit 0: durchs Filter (statt trocken)
 //============================================================================
 
 module orgel
@@ -57,6 +69,7 @@ module orgel
 	input       [7:0] reg_din,
 	output reg  [7:0] reg_dout,
 	input             reg_we,
+	input             reg_seite,    // 1: zweite Seite (Samplekanaele 4-7)
 
 	// Sample-DMA: dma_gnt sagt die Anfrage zu (Adresse gilt in diesem Takt),
 	// mit dma_ack liegen die Daten an - beim Chip-RAM einen Takt danach, beim
@@ -68,6 +81,15 @@ module orgel
 	input       [7:0] dma_data,
 	input             dma_wort,
 	input      [15:0] dma_data16,
+
+	// Echo im Zusatzspeicher (Etappe 16): ein Wort lesen bzw. schreiben,
+	// Lesedaten mit e_ack in dma_data16
+	output            e_req,
+	output            e_we,
+	output     [23:0] e_adr,
+	output     [15:0] e_din,
+	input             e_gnt,
+	input             e_ack,
 
 	output reg signed [15:0] links,
 	output reg signed [15:0] rechts
@@ -96,25 +118,36 @@ reg [10:0] f_ecke;
 reg  [7:0] f_rf;                    // Resonanz / Filterstimmen
 reg  [7:0] f_modus;
 reg  [3:0] k_pegel;                 // Samplepegel n/4
+reg  [2:0] x_bits  [0:7];           // Effekte je Samplekanal (Etappe 16)
+reg  [7:0] x_rate  [0:7];
+reg  [3:0] x_drive [0:7];
+reg  [3:0] x_send  [0:7];
+reg        x_filt  [0:7];
+reg [14:0] e_zeit;                  // Echo
+reg  [3:0] e_rueck, e_anteil;
+reg  [7:0] e_bank;
+reg        e_neu;                   // Zeit oder Bank neu: Echo von vorn
 
-reg [23:0] k_start [0:3];
-reg [23:0] k_len   [0:3];
-reg [23:0] k_loop  [0:3];
-reg [15:0] k_schr  [0:3];
-reg  [5:0] k_laut  [0:3];
-reg  [7:0] k_pan   [0:3];
-reg        k_schl  [0:3];
-reg  [3:0] k_neu;                   // Start angefordert
-reg  [3:0] k_halt;                  // Stopp angefordert
+reg [23:0] k_start [0:7];
+reg [23:0] k_len   [0:7];
+reg [23:0] k_loop  [0:7];
+reg [15:0] k_schr  [0:7];
+reg  [5:0] k_laut  [0:7];
+reg  [7:0] k_pan   [0:7];
+reg        k_schl  [0:7];
+reg  [7:0] k_neu;                   // Start angefordert
+reg  [7:0] k_halt;                  // Stopp angefordert
 
 wire [1:0] rn = reg_addr[5:4];      // Stimme bzw. Kanal
+wire [2:0] kn = {reg_seite, rn};    // Samplekanal 0-7
 
 integer i;
 always @(posedge clk) begin
-	k_neu  <= 4'd0;
-	k_halt <= 4'd0;
+	k_neu  <= 8'd0;
+	k_halt <= 8'd0;
+	e_neu  <= 1'b0;
 	if (reg_we) begin
-		if (reg_addr[7:6] == 2'b00) begin
+		if (reg_addr[7:6] == 2'b00 && !reg_seite) begin
 			case (reg_addr[3:0])
 				4'h0: s_freq[rn][7:0]  <= reg_din;
 				4'h1: s_freq[rn][15:8] <= reg_din;
@@ -128,7 +161,7 @@ always @(posedge clk) begin
 				default: ;
 			endcase
 		end
-		else if (reg_addr[7:4] == 4'h4) begin
+		else if (reg_addr[7:4] == 4'h4 && !reg_seite) begin
 			case (reg_addr[3:0])
 				4'h0: f_ecke[7:0]  <= reg_din;
 				4'h1: f_ecke[10:8] <= reg_din[2:0];
@@ -138,32 +171,52 @@ always @(posedge clk) begin
 				default: ;
 			endcase
 		end
+		else if (reg_addr[7:4] == 4'h5 && !reg_seite) begin
+			case (reg_addr[3:0])
+				4'h0: begin e_zeit[7:0]  <= reg_din;      e_neu <= 1'b1; end
+				4'h1: begin e_zeit[14:8] <= reg_din[6:0]; e_neu <= 1'b1; end
+				4'h2: e_rueck  <= reg_din[3:0];
+				4'h3: e_anteil <= reg_din[3:0];
+				4'h4: begin e_bank <= reg_din;             e_neu <= 1'b1; end
+				default: ;
+			endcase
+		end
+		else if (reg_addr[7:6] == 2'b11) begin
+			case (reg_addr[3:0])
+				4'h0: x_bits[kn]  <= reg_din[7:3] != 5'd0 ? 3'd0 : reg_din[2:0];
+				4'h1: x_rate[kn]  <= reg_din;
+				4'h2: x_drive[kn] <= reg_din[3:0];
+				4'h3: x_send[kn]  <= reg_din[3:0];
+				4'h4: x_filt[kn]  <= reg_din[0];
+				default: ;
+			endcase
+		end
 		else if (reg_addr[7:6] == 2'b10) begin
 			case (reg_addr[3:0])
-				4'h0: k_start[rn][7:0]   <= reg_din;
-				4'h1: k_start[rn][15:8]  <= reg_din;
-				4'h2: k_start[rn][23:16] <= reg_din;
+				4'h0: k_start[kn][7:0]   <= reg_din;
+				4'h1: k_start[kn][15:8]  <= reg_din;
+				4'h2: k_start[kn][23:16] <= reg_din;
 				4'h3: begin
-					k_len[rn][7:0]   <= reg_din;
-					k_len[rn][23:16] <= 8'd0;
+					k_len[kn][7:0]   <= reg_din;
+					k_len[kn][23:16] <= 8'd0;
 				end
-				4'h4: k_len[rn][15:8]    <= reg_din;
+				4'h4: k_len[kn][15:8]    <= reg_din;
 				4'h5: begin
-					k_loop[rn][7:0]   <= reg_din;
-					k_loop[rn][23:16] <= 8'd0;
+					k_loop[kn][7:0]   <= reg_din;
+					k_loop[kn][23:16] <= 8'd0;
 				end
-				4'h6: k_loop[rn][15:8]   <= reg_din;
-				4'h7: k_schr[rn][7:0]    <= reg_din;
-				4'h8: k_schr[rn][15:8]   <= reg_din;
-				4'h9: k_laut[rn]         <= reg_din[5:0];
-				4'hA: k_pan[rn]          <= reg_din;
+				4'h6: k_loop[kn][15:8]   <= reg_din;
+				4'h7: k_schr[kn][7:0]    <= reg_din;
+				4'h8: k_schr[kn][15:8]   <= reg_din;
+				4'h9: k_laut[kn]         <= reg_din[5:0];
+				4'hA: k_pan[kn]          <= reg_din;
 				4'hB: begin
-					k_schl[rn] <= reg_din[1];
-					if (reg_din[0]) k_neu[rn]  <= 1'b1;
-					else            k_halt[rn] <= 1'b1;
+					k_schl[kn] <= reg_din[1];
+					if (reg_din[0]) k_neu[kn]  <= 1'b1;
+					else            k_halt[kn] <= 1'b1;
 				end
-				4'hE: k_len[rn][23:16]   <= reg_din;
-				4'hF: k_loop[rn][23:16]  <= reg_din;
+				4'hE: k_len[kn][23:16]   <= reg_din;
+				4'hF: k_loop[kn][23:16]  <= reg_din;
 				default: ;
 			endcase
 		end
@@ -173,6 +226,8 @@ always @(posedge clk) begin
 			s_st[i]   <= 8'd0;
 			s_laut[i] <= 4'd15;
 			s_pan[i]  <= 8'hFF;
+		end
+		for (i = 0; i < 8; i = i + 1) begin
 			k_laut[i] <= 6'd63;
 			k_pan[i]  <= 8'hFF;
 			k_schl[i] <= 1'b0;
@@ -180,7 +235,18 @@ always @(posedge clk) begin
 		f_rf    <= 8'h00;
 		f_modus <= 8'h0F;
 		k_pegel <= 4'd4;
-		k_halt  <= 4'hF;
+		e_zeit   <= 15'd0;
+		e_rueck  <= 4'd0;
+		e_anteil <= 4'd0;
+		e_bank   <= 8'd0;
+		for (i = 0; i < 8; i = i + 1) begin
+			x_bits[i]  <= 3'd0;
+			x_rate[i]  <= 8'd0;
+			x_drive[i] <= 4'd0;
+			x_send[i]  <= 4'd0;
+			x_filt[i]  <= 1'b0;
+		end
+		k_halt  <= 8'hFF;
 	end
 end
 
@@ -307,32 +373,34 @@ end
 
 //////////////////////////////  Samplekanaele  //////////////////////////////
 
-reg [23:0] k_pos  [0:3];            // Index im Sample
-reg [15:0] k_frac [0:3];            // Nachkommastellen
-reg        k_an   [0:3];
-reg        k_hol  [0:3];            // neues Byte noetig
-reg  [7:0] k_wert [0:3];
-reg        k_wok  [0:3];            // Wortpuffer (Zusatzspeicher) gueltig
-reg [22:0] k_wadr [0:3];
-reg [15:0] k_wdat [0:3];
-reg  [1:0] dma_k;                   // gerade bediente Anfrage
+reg [23:0] k_pos  [0:7];            // Index im Sample
+reg [15:0] k_frac [0:7];            // Nachkommastellen
+reg        k_an   [0:7];
+reg        k_hol  [0:7];            // neues Byte noetig
+reg  [7:0] k_wert [0:7];
+reg        k_wok  [0:7];            // Wortpuffer (Zusatzspeicher) gueltig
+reg [22:0] k_wadr [0:7];
+reg [15:0] k_wdat [0:7];
+reg  [2:0] dma_k;                   // gerade bediente Anfrage
 reg        dma_busy;
 reg        dma_gew;                 // zugesagt, Daten kommen
 reg [22:0] dma_wa;                  // Wortadresse der zugesagten Anfrage
 
 // Adresse des naechsten Bytes je Kanal, und ob es im Wortpuffer steht
-wire [23:0] k_voll [0:3];
-wire  [3:0] k_treffer;
+wire [23:0] k_voll [0:7];
+wire  [7:0] k_treffer;
+wire  [7:0] k_dma;
 genvar gk;
-generate for (gk = 0; gk < 4; gk = gk + 1) begin : kanal
+generate for (gk = 0; gk < 8; gk = gk + 1) begin : kanal
 	assign k_voll[gk]    = k_start[gk] + k_pos[gk];
 	assign k_treffer[gk] = k_hol[gk] && k_wok[gk] && k_wadr[gk] == k_voll[gk][23:1];
+	assign k_dma[gk]     = k_hol[gk] && !k_treffer[gk];
 end endgenerate
-wire  [3:0] k_dma = {k_hol[3] && !k_treffer[3], k_hol[2] && !k_treffer[2],
-                     k_hol[1] && !k_treffer[1], k_hol[0] && !k_treffer[0]};
 
 reg [16:0] kf;
 reg [24:0] kp;
+reg  [2:0] kw;
+reg        k_gef;
 integer    m;
 always @(posedge clk) begin
 	// Erst die DMA-Antwort, damit ein im selben Takt neu angefordertes Byte
@@ -356,12 +424,19 @@ always @(posedge clk) begin
 		dma_wa  <= dma_addr[23:1];
 	end
 	else if (!dma_busy) begin
-		if      (k_dma[0]) begin dma_k <= 2'd0; dma_busy <= 1'b1; end
-		else if (k_dma[1]) begin dma_k <= 2'd1; dma_busy <= 1'b1; end
-		else if (k_dma[2]) begin dma_k <= 2'd2; dma_busy <= 1'b1; end
-		else if (k_dma[3]) begin dma_k <= 2'd3; dma_busy <= 1'b1; end
+		// reihum ab dem Kanal nach dem zuletzt bedienten - bei acht Kanaelen
+		// soll keiner warten, weil die vorderen immer zuerst drankommen
+		k_gef = 1'b0;
+		for (m = 1; m <= 8; m = m + 1) begin
+			kw = dma_k + 3'(m);
+			if (!k_gef && k_dma[kw]) begin
+				dma_k    <= kw;
+				dma_busy <= 1'b1;
+				k_gef    = 1'b1;
+			end
+		end
 	end
-	for (m = 0; m < 4; m = m + 1) begin
+	for (m = 0; m < 8; m = m + 1) begin
 		if (k_treffer[m]) begin
 			k_wert[m] <= k_voll[m][0] ? k_wdat[m][15:8] : k_wdat[m][7:0];
 			k_hol[m]  <= 1'b0;
@@ -396,7 +471,7 @@ always @(posedge clk) begin
 	if (reset) begin
 		dma_busy <= 1'b0;
 		dma_gew  <= 1'b0;
-		for (m = 0; m < 4; m = m + 1) begin
+		for (m = 0; m < 8; m = m + 1) begin
 			k_an[m]   <= 1'b0;
 			k_hol[m]  <= 1'b0;
 			k_wert[m] <= 8'd0;
@@ -407,6 +482,115 @@ end
 
 assign dma_req  = dma_busy && !dma_gew;
 assign dma_addr = k_voll[dma_k];
+
+// Crusher und Verzerrung je Kanal (Etappe 16), einmal je Mikrosekunde:
+// untere Bits weg, den Wert n us halten, dann verstaerken und weich begrenzen
+function automatic [7:0] bits_weg(input [7:0] w, input [2:0] b);
+	bits_weg = (b == 3'd0) ? w : (w & (8'hFF << (4'd8 - {1'b0, b})));
+endfunction
+
+function automatic [7:0] zerren(input [7:0] w, input [3:0] d);
+	reg signed [15:0] t;
+	reg        [15:0] a, y;
+	begin
+		if (d == 4'd0) zerren = w;
+		else begin
+			// mal (4 + 2d)/4: 1,5 bis 8,5; Knie bei 64, darueber Steigung 1/4
+			t = ($signed({{8{w[7]}}, w}) * $signed({10'd0, {1'b0, d, 1'b0} + 6'd4})) >>> 2;
+			a = t[15] ? 16'(-t) : 16'(t);
+			y = (a <= 16'd64) ? a : 16'd64 + ((a - 16'd64) >> 2);
+			if (y > 16'd127) y = 16'd127;
+			zerren = t[15] ? 8'(-y[7:0]) : y[7:0];
+		end
+	end
+endfunction
+
+reg  [7:0] x_cnt  [0:7];
+reg  [7:0] x_hold [0:7];
+reg  [7:0] k_fx   [0:7];            // Wert nach den Effekten
+integer    q;
+always @(posedge clk) begin
+	if (tick) for (q = 0; q < 8; q = q + 1) begin
+		if (x_rate[q] == 8'd0 || x_cnt[q] == 8'd0) begin
+			x_hold[q] <= bits_weg(k_wert[q], x_bits[q]);
+			x_cnt[q]  <= (x_rate[q] == 8'd0) ? 8'd0 : x_rate[q] - 8'd1;
+		end
+		else x_cnt[q] <= x_cnt[q] - 8'd1;
+		k_fx[q] <= zerren(x_hold[q], x_drive[q]);
+	end
+	if (reset) for (q = 0; q < 8; q = q + 1) begin
+		x_cnt[q]  <= 8'd0;
+		x_hold[q] <= 8'd0;
+		k_fx[q]   <= 8'd0;
+	end
+end
+
+//////////////////////////////  Echo  ///////////////////////////////////////
+
+// Alle 32 us ein Abtastwert: das Wort an der Position lesen (das Echo von
+// vor ZEIT Werten), Eingang + Echo * RUECK/16 zurueckschreiben, weiter.
+// Bis der Puffer einmal ganz beschrieben ist, gilt das Gelesene als 0.
+reg  [4:0] e_teiler;
+reg  [1:0] e_st;
+reg        e_busy, e_gew, e_schreib, e_vorn;
+reg [14:0] e_pos, e_fill;
+reg signed [15:0] e_wet, e_wert;
+reg signed [15:0] e_sum;            // Eingang (aus dem Mischpult)
+reg signed [21:0] e_n;
+
+assign e_req = e_busy && !e_gew;
+assign e_we  = e_schreib;
+assign e_adr = {e_bank, e_pos, 1'b0};
+assign e_din = e_wert;
+
+always @(posedge clk) begin
+	if (tick) e_teiler <= e_teiler + 5'd1;
+	if (e_neu) e_vorn <= 1'b1;
+	if (e_gnt) e_gew <= 1'b1;
+	case (e_st)
+		2'd0: begin
+			if (e_bank == 8'd0) e_wet <= 16'sd0;
+			if (tick && e_teiler == 5'd0 && e_bank != 8'd0 && e_zeit != 15'd0) begin
+				if (e_vorn || e_neu) begin
+					e_pos  <= 15'd0;
+					e_fill <= 15'd0;
+					e_vorn <= 1'b0;
+				end
+				e_busy    <= 1'b1;
+				e_gew     <= 1'b0;
+				e_schreib <= 1'b0;
+				e_st      <= 2'd1;
+			end
+		end
+		2'd1: if (e_ack) begin
+			e_n = (e_fill >= e_zeit) ? 22'($signed(dma_data16)) : 22'sd0;
+			e_wet <= 16'(e_n);
+			e_n = 22'(e_sum) + ((e_n * $signed({1'b0, e_rueck})) >>> 4);
+			e_wert    <= (e_n > 22'sd32767) ? 16'sd32767 : (e_n < -22'sd32767) ? -16'sd32767 : 16'(e_n);
+			e_schreib <= 1'b1;
+			e_gew     <= 1'b0;
+			e_st      <= 2'd2;
+		end
+		2'd2: if (e_ack) begin
+			e_busy    <= 1'b0;
+			e_gew     <= 1'b0;
+			e_schreib <= 1'b0;
+			e_pos     <= (e_pos + 15'd1 >= e_zeit) ? 15'd0 : e_pos + 15'd1;
+			if (e_fill < e_zeit) e_fill <= e_fill + 15'd1;
+			e_st      <= 2'd0;
+		end
+		default: e_st <= 2'd0;
+	endcase
+	if (reset) begin
+		e_st      <= 2'd0;
+		e_busy    <= 1'b0;
+		e_gew     <= 1'b0;
+		e_schreib <= 1'b0;
+		e_vorn    <= 1'b1;
+		e_wet     <= 16'sd0;
+		e_teiler  <= 5'd0;
+	end
+end
 
 //////////////////////////////  Filter und Mischpult  ///////////////////////
 
@@ -423,17 +607,26 @@ reg  signed [21:0] s_l, s_r, k_l, k_r, roh;
 reg  signed [45:0] p;
 reg  signed [23:0] st_a, st_b;
 reg  signed [21:0] summe_l, summe_r;
+reg  signed [21:0] e_mix;
 reg  signed [26:0] laut_l, laut_r;
 
 // Samplekanaele: Wert * Lautstaerke * Panorama
-wire signed [17:0] k_sl [0:3];
-wire signed [17:0] k_sr [0:3];
+wire signed [17:0] k_sl [0:7];
+wire signed [17:0] k_sr [0:7];
+wire signed [14:0] k_kv [0:7];      // Wert * Lautstaerke
+wire signed [27:0] k_zf [0:7];      // zum Filter (in Stimmen-Einheiten)
+wire signed [21:0] k_es [0:7];      // zum Echo
 genvar g;
 generate
-	for (g = 0; g < 4; g = g + 1) begin : kanal_mix
-		wire signed [14:0] kv = $signed(k_wert[g]) * $signed({1'b0, k_laut[g]});
-		assign k_sl[g] = k_an[g] ? kv * $signed({1'b0, k_pan[g][7:4]}) : 18'sd0;
-		assign k_sr[g] = k_an[g] ? kv * $signed({1'b0, k_pan[g][3:0]}) : 18'sd0;
+	for (g = 0; g < 8; g = g + 1) begin : kanal_mix
+		wire signed [14:0] kv = $signed(k_fx[g]) * $signed({1'b0, k_laut[g]});
+		wire               trocken = k_an[g] && !x_filt[g];
+		assign k_kv[g] = kv;
+		assign k_sl[g] = trocken ? kv * $signed({1'b0, k_pan[g][7:4]}) : 18'sd0;
+		assign k_sr[g] = trocken ? kv * $signed({1'b0, k_pan[g][3:0]}) : 18'sd0;
+		// ins Filter wie eine Stimme: kv * SAMPLEPEGEL / 16 (bei 4 rund +-2000)
+		assign k_zf[g] = (k_an[g] && x_filt[g]) ? 28'((kv * $signed({1'b0, k_pegel})) >>> 4) : 28'sd0;
+		assign k_es[g] = k_an[g] ? 22'(kv * $signed({1'b0, x_send[g]})) : 22'sd0;
 	end
 endgenerate
 
@@ -468,7 +661,9 @@ always @(posedge clk) begin
 			stimme[j] <= 20'(st_b >>> 4);
 		end
 		4'd2: f_ein <= ((f_rf[0] ? 28'(stimme[0]) : 28'sd0) + (f_rf[1] ? 28'(stimme[1]) : 28'sd0) +
-		                (f_rf[2] ? 28'(stimme[2]) : 28'sd0) + (f_rf[3] ? 28'(stimme[3]) : 28'sd0)) <<< 8;
+		                (f_rf[2] ? 28'(stimme[2]) : 28'sd0) + (f_rf[3] ? 28'(stimme[3]) : 28'sd0) +
+		                k_zf[0] + k_zf[1] + k_zf[2] + k_zf[3] +
+		                k_zf[4] + k_zf[5] + k_zf[6] + k_zf[7]) <<< 8;
 		4'd3: begin                                     // tief += F * band
 			p = $signed({1'b0, f_F}) * f_band;
 			f_tief <= f_tief + 28'(p >>> 16);
@@ -492,14 +687,21 @@ always @(posedge clk) begin
 			// Samples: +-128 * 63 * 15 / 64 = +-1890 - so laut wie eine Stimme -,
 			// dazu mal SAMPLEPEGEL / 4. Ein Trommelschlag hat diese Spitze nur
 			// einen Augenblick, ein Synth-Ton haelt sie: daher der Regler.
-			k_l <= 22'(((26'(k_sl[0]) + 26'(k_sl[1]) + 26'(k_sl[2]) + 26'(k_sl[3])) *
+			k_l <= 22'(((26'(k_sl[0]) + 26'(k_sl[1]) + 26'(k_sl[2]) + 26'(k_sl[3]) +
+			             26'(k_sl[4]) + 26'(k_sl[5]) + 26'(k_sl[6]) + 26'(k_sl[7])) *
 			            $signed({1'b0, k_pegel})) >>> 8);
-			k_r <= 22'(((26'(k_sr[0]) + 26'(k_sr[1]) + 26'(k_sr[2]) + 26'(k_sr[3])) *
+			k_r <= 22'(((26'(k_sr[0]) + 26'(k_sr[1]) + 26'(k_sr[2]) + 26'(k_sr[3]) +
+			             26'(k_sr[4]) + 26'(k_sr[5]) + 26'(k_sr[6]) + 26'(k_sr[7])) *
 			            $signed({1'b0, k_pegel})) >>> 8);
+			// Echo-Eingang in denselben Einheiten wie k_l bei SAMPLEPEGEL 4
+			e_sum <= 16'((k_es[0] + k_es[1] + k_es[2] + k_es[3] +
+			              k_es[4] + k_es[5] + k_es[6] + k_es[7]) >>> 6);
+			// Echo-Ausgang: mal ANTEIL/16 und mal SAMPLEPEGEL/4, in die Mitte
+			e_mix <= 22'((32'(e_wet) * $signed({1'b0, e_anteil}) * $signed({1'b0, k_pegel})) >>> 6);
 		end
 		4'd8: begin
-			summe_l <= s_l + roh + k_l;
-			summe_r <= s_r + roh + k_r;
+			summe_l <= s_l + roh + k_l + e_mix;
+			summe_r <= s_r + roh + k_r + e_mix;
 		end
 		4'd9: begin
 			// Gesamtlautstaerke * 3/16: eine Stimme allein -16 dBFS, alle acht
@@ -526,7 +728,7 @@ end
 
 always @* begin
 	reg_dout = 8'hFF;
-	if (reg_addr[7:6] == 2'b00) begin
+	if (reg_addr[7:6] == 2'b00 && !reg_seite) begin
 		case (reg_addr[3:0])
 			4'h9: reg_dout = env[rn];
 			4'hA: reg_dout = welle[rn][11:4];
@@ -535,10 +737,10 @@ always @* begin
 	end
 	else if (reg_addr[7:6] == 2'b10) begin
 		case (reg_addr[3:0])
-			4'hB: reg_dout = {7'd0, k_an[rn]};
-			4'hC: reg_dout = k_pos[rn][7:0];
-			4'hD: reg_dout = k_pos[rn][15:8];
-			4'hE: reg_dout = k_pos[rn][23:16];
+			4'hB: reg_dout = {7'd0, k_an[kn]};
+			4'hC: reg_dout = k_pos[kn][7:0];
+			4'hD: reg_dout = k_pos[kn][15:8];
+			4'hE: reg_dout = k_pos[kn][23:16];
 			default: ;
 		endcase
 	end

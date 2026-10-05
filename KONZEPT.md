@@ -14,7 +14,7 @@ fertiger 65C816-Kern, alles drumherum ist Eigenbau.
 | Grafik | Text, 2 Bitmap-Modi | **2 Ebenen, je Text 40/80, Kacheln mit Scrolling, Bitmap 16/256 Farben** | Bitplanes |
 | Sprites | 8 | **32 × 16x16 (oder 32x32), 16 Farben, keine Grenze pro Zeile** | 8 |
 | Spezial | Raster-IRQ | **Copper-Liste, Blitter** | Copper, Blitter |
-| Ton | SID, 3 Stimmen | **4 Synthesestimmen + 4 Samplekanäle, Stereo** | Paula, 4 Samples |
+| Ton | SID, 3 Stimmen | **4 Synthesestimmen + 8 Samplekanäle, Stereo** | Paula, 4 Samples |
 | BASIC | Microsoft V2 | **Microsoft 1.1 + MERIDIAN-Befehle für Grafik und Klang** | AmigaBASIC |
 | Datenträger | Diskette 170 KB, Modul | **Disketten-/Platten-Images (FAT16), Module bis 4 MB** | Diskette 880 KB |
 
@@ -27,7 +27,7 @@ fertiger 65C816-Kern, alles drumherum ist Eigenbau.
 | **PFORTE** | Ein-/Ausgabe: Tastatur, Joysticks, Maus, Timer, Uhrzeit | Tastatur-Puffer, 2 Joysticks, Maus, 2 Timer, µs-Uhr, Kalenderuhr (Etappe 11) |
 | **BOTE** | Programmlader: MiSTer-Menü und Netz (DDR3-Postfach), DMA, Fernstart | Etappe 3 |
 | **KOBOLD** | Sprites (Teil von PINSEL): 32 × 16×16, eigener Musterspeicher, Kollisionen | Etappe 5 |
-| **ORGEL** | Ton: 4 Synthesestimmen mit SID-Seele + 4 Samplekanäle mit Paula-Seele, Stereo, Filter | Etappe 6 |
+| **ORGEL** | Ton: 4 Synthesestimmen mit SID-Seele + 8 Samplekanäle mit Paula-Seele (seit Etappe 17; anfangs 4), Stereo, Filter, Echo | Etappe 6 |
 | **KRAN** | Blitter: Rechtecke kopieren, füllen, mit Durchsicht kopieren; Auftragslisten | Etappe 7 |
 | **LOTSE** | Copper: fährt mit dem Strahl, setzt Register zeilen- und punktgenau | Etappe 7 |
 | **ZUSATZ** | SDRAM-Steuerung: 15,7 MB Zusatzspeicher in den Bänken `$04–$FE` | Etappe 8 |
@@ -72,6 +72,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$00:C800` | SYSTEM: Bit 0 SPIEGEL, Bit 1/2 SCHRITT (siehe unten) |
 | `$00:C900–$00:C9FF` | TRUHE: Register |
 | `$00:CA00–$00:CBFF` | TRUHE: Puffer (ein Block, 512 Byte) |
+| `$00:CC00–$00:CCFF` | ORGEL, Seite 2: Samplekanäle 4–7 (Etappe 17) |
 | `$00:C801–$00:CFFF` | sonst: weitere Chips (liest `$FF`) |
 | `$00:D000–$00:FFFF` | Kern-ROM, Vektoren ab `$FFE4` |
 | `$01:0000–$01:FFFF` | RAM Bank 1; mit BASIC: Datenbank (Kopie des BASIC-Codes `$2000–$47FF`, Programm, Variablen und Zeichenketten `$4800–$FFFF`) |
@@ -462,7 +463,7 @@ gestellt, der 1. Januar 2026.
 ## ORGEL – Klang, Register ab `$00:C500`
 
 Zwei Welten in einem Chip: vier Synthesestimmen, die sich wie ein SID
-anfühlen, und vier Samplekanäle wie bei Paula. Alles läuft im
+anfühlen, und acht Samplekanäle wie bei Paula (bis Etappe 16 vier). Alles läuft im
 Mikrosekundentakt (1 MHz) und wird in Stereo gemischt.
 
 **Synthesestimmen** – Stimme n (0–3) ab `$C500 + n·$10`, die ersten sieben
@@ -490,9 +491,15 @@ ein 23-Bit-Schieberegister wie im SID, die Hüllkurve klingt exponentiell ab.
 | `$C540/41` | Eckfrequenz, 11 Bit |
 | `$C542` | Resonanz (oben, 0–15) / welche Stimmen durchs Filter (unten, Bit n = Stimme n) |
 | `$C543` | Bit 4 Tiefpass, 5 Bandpass, 6 Hochpass (kombinierbar); Bits 0–3 Gesamtlautstärke |
-| `$C544` | SAMPLEPEGEL n (0–15): die vier Samplekanäle mal n/4 (Etappe 15; nach dem Einschalten 4) |
+| `$C544` | SAMPLEPEGEL n (0–15): die Samplekanäle mal n/4 (Etappe 15; nach dem Einschalten 4) |
+| `$C550/51` | ECHO-ZEIT in Abtastwerten zu 32 µs (1–32767, gut eine Sekunde; Etappe 16) |
+| `$C552` | ECHO-RÜCKKOPPLUNG 0–15 (n/16) |
+| `$C553` | ECHO-ANTEIL 0–15 (n/16), in die Mitte gemischt |
+| `$C554` | ECHO-BANK: 64-KB-Puffer ab Bank:0000 im Zusatzspeicher; 0 = Echo aus (nach dem Einschalten) |
 
-**Samplekanäle** – Kanal k (0–3) ab `$C580 + k·$10`:
+**Samplekanäle** – Kanal k (0–3) ab `$C580 + k·$10`, Kanal 4+k (Etappe 17)
+mit denselben Versätzen in der zweiten Seite ab `$CC80 + k·$10` (Effekte
+dort ab `$CCC0`; der Rest der Seite liest `$FF`):
 
 | Versatz | Name | |
 |---|---|---|
@@ -506,6 +513,25 @@ ein 23-Bit-Schieberegister wie im SID, die Hüllkurve klingt exponentiell ab.
 | `+C/+D` | POS | lesen: Position im Sample (Bits 0–15) |
 | `+E` | LÄNGE / POS | schreiben: LÄNGE Bits 16–23 (Etappe 15); lesen: POS Bits 16–23 |
 | `+F` | SCHLEIFE | schreiben: SCHLEIFE Bits 16–23 |
+
+**Effekte je Samplekanal** (Etappe 16) – Kanal k ab `$C5C0 + k·$10`, Kette
+Crusher → Verzerrung → Lautstärke und Panorama; nach dem Einschalten alles 0:
+
+| Versatz | Name | |
+|---|---|---|
+| `+0` | BITS | 1–7 Bits behalten (0 = alle 8) |
+| `+1` | RATE | jeden Wert n µs halten (0 = aus; 125 = 8 kHz) |
+| `+2` | VERZERRUNG | 0–15: mal (4 + 2n)/4, darüber weich begrenzt |
+| `+3` | ECHO | Anteil des Kanals am Echo 0–15 |
+| `+4` | FILTER | Bit 0: der Kanal läuft durchs Filter (statt trocken, Mitte) |
+
+Das **Echo** ist mono, 16 Bit bei 31,25 kHz, und liegt im Zusatzspeicher: Je
+32 µs liest die ORGEL den Wert von vor ZEIT Schritten, schreibt Eingang plus
+Echo mal RÜCKKOPPLUNG zurück und mischt das Gelesene mal ANTEIL dazu – mit
+Vorrang nach ihren Samples, vor CPU und KRAN, gut 62 000 Zugriffe in der
+Sekunde. Nach einem Wechsel von ZEIT oder BANK gilt der Puffer, bis er einmal
+ganz beschrieben ist, als still. Ein Programm, das das Echo nutzt, reserviert
+dafür 64 KB.
 
 `+3` setzt LÄNGE Bits 16–23 auf 0, `+5` ebenso SCHLEIFE – ältere Programme
 merken nichts davon; wer längere Samples spielt, schreibt `+E`/`+F` danach.
@@ -847,7 +873,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `STAMP adr,x,y,b,h` | Bild (b×h Bytes, Farbe 0 durchsichtig) von adr – auch aus dem Zusatzspeicher – in die Grafik |
 | `SPRITE n[,x,y[,m[,f]]]` | Sprite n (0–31) bei x,y mit Muster m; f = Palettenbank + 16 spiegeln X + 32 Y + 64 hinter der Grafik + 128 doppelt groß; nur n: aus |
 | `PATTERN m,z,"…"` | Zeile z (0–15) von Muster m (0–127): 16 Hexziffern, eine je Pixel („.“ = durchsichtig) |
-| `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–3): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; spielt aus dem Chip-RAM oder direkt aus dem Zusatzspeicher, bis 16 MB lang (Etappe 15); nur k: anhalten |
+| `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–7): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; spielt aus dem Chip-RAM oder direkt aus dem Zusatzspeicher, bis 16 MB lang (Etappe 15); nur k: anhalten |
 | `GRADIENT z1,r1,g1,b1,z2,r2,g2,b2` | Farbverlauf der Hintergrundfarbe von Zeile z1 bis z2 (Anteile 0–15), LOTSE setzt sie in jeder Zeile; mehrere Verläufe ergänzen sich; ohne Werte: aus |
 | `PLAY "noten"[,stimme]` | Musik im Hintergrund auf Stimme 1–4 (Vorgabe 1), siehe unten; leerer Text: Stimme still |
 | `MOUSE 1[,n]` / `MOUSE 0` | Mauszeiger (Pfeil, Sprite n, Vorgabe 0 = ganz vorn) an / aus |
@@ -1048,6 +1074,11 @@ mit den neuen Namen.
     Vorrang vor CPU und KRAN und einem Wortpuffer je Kanal; Länge und
     Schleife 24 Bit (bis 16 MB je Sample). BASIC `SAMPLE` spielt direkt
     von dort.
+16. Klangeffekte ✔ (Simulation und Hardware, 05.10.2026): Echo im
+    Zusatzspeicher, Crusher (Bits, Abtastrate), Verzerrung und der Weg durchs
+    Filter für jeden Samplekanal.
+17. Acht Samplekanäle ✔ (Simulation und Hardware, 05.10.2026): Kanäle 4–7
+    in einer zweiten Registerseite bei `$CC00`; BASIC `SAMPLE` 0–7.
 
 **Ausblick** (die Ideensammlung dazu):
 

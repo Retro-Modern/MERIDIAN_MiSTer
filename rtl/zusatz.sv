@@ -32,6 +32,8 @@ module zusatz
 	input      [23:0] adr,
 	input             we,
 	input       [7:0] din,
+	input             w16,          // ganzes Wort schreiben (Echo, Etappe 16)
+	input      [15:0] din16,
 	output reg        ack_t,
 	output reg  [7:0] q,
 	output reg [15:0] q16,          // ganzes Wort (fuer den Wortpuffer)
@@ -61,8 +63,9 @@ reg [14:0] warte;                   // Einschaltwartezeit und Init-Schritte
 reg  [3:0] schritt;
 reg  [8:0] auffr_zaehler;
 reg        auffr_faellig;
-reg        r_we, r_byte;
+reg        r_we, r_byte, r_w16;
 reg  [7:0] r_din;
+reg [15:0] r_din16;
 reg [15:0] dq_neg;
 
 task befehl(input [3:0] c);
@@ -123,6 +126,8 @@ always @(posedge clk) begin
 				r_we    <= we;
 				r_byte  <= adr[0];
 				r_din   <= din;
+				r_w16   <= w16;
+				r_din16 <= din16;
 				schritt <= 4'd0;
 				st      <= Z_LAUF;
 			end
@@ -137,12 +142,20 @@ always @(posedge clk) begin
 					sd_a[8:0] <= adr[9:1];
 					if (r_we) begin
 						befehl(C_WRITE);
-						sd_dq_o   <= {r_din, r_din};
 						sd_dq_oe  <= 1'b1;
-						sd_a[12]  <= !r_byte;         // Maske oben (DQMH)
-						sd_a[11]  <= r_byte;          // Maske unten (DQML)
-						sd_dqml   <= r_byte;          // das andere Byte maskieren
-						sd_dqmh   <= !r_byte;
+						if (r_w16) begin              // beide Bytes
+							sd_dq_o     <= r_din16;
+							sd_a[12:11] <= 2'b00;
+							sd_dqml     <= 1'b0;
+							sd_dqmh     <= 1'b0;
+						end
+						else begin
+							sd_dq_o   <= {r_din, r_din};
+							sd_a[12]  <= !r_byte;     // Maske oben (DQMH)
+							sd_a[11]  <= r_byte;      // Maske unten (DQML)
+							sd_dqml   <= r_byte;      // das andere Byte maskieren
+							sd_dqmh   <= !r_byte;
+						end
 						ack_t     <= req_t;           // Schreiben gilt als erledigt
 					end
 					else begin
