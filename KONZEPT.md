@@ -490,6 +490,7 @@ ein 23-Bit-Schieberegister wie im SID, die Hüllkurve klingt exponentiell ab.
 | `$C540/41` | Eckfrequenz, 11 Bit |
 | `$C542` | Resonanz (oben, 0–15) / welche Stimmen durchs Filter (unten, Bit n = Stimme n) |
 | `$C543` | Bit 4 Tiefpass, 5 Bandpass, 6 Hochpass (kombinierbar); Bits 0–3 Gesamtlautstärke |
+| `$C544` | SAMPLEPEGEL n (0–15): die vier Samplekanäle mal n/4 (Etappe 15; nach dem Einschalten 4) |
 
 **Samplekanäle** – Kanal k (0–3) ab `$C580 + k·$10`:
 
@@ -518,8 +519,11 @@ Kanal merkt es sich und fragt erst für das nächste Wort wieder; am SDRAM
 hat sie Vorrang vor CPU und KRAN (nur das Laden durch BOTE geht vor).
 Selbst vier Kanäle mit 44 kHz brauchen nur rund 90 000 Zugriffe in der
 Sekunde – ein paar Prozent dessen, was das SDRAM schafft. **Pegel:** eine Stimme allein bei voller Lautstärke etwa
-−16 dBFS, ein Samplekanal genauso laut; erst wenn alle acht zugleich ganz
-oben stehen, greift die Begrenzung.
+−16 dBFS, ein Samplekanal (bei SAMPLEPEGEL 4) mit derselben Spitze; erst
+wenn alle acht zugleich ganz oben stehen, greift die Begrenzung. Ein
+Synth-Ton hält seine Spitze aber, ein Trommelschlag nur einen Augenblick –
+im Mix gehen Samples bei gleicher Spitze unter. Dafür gibt es SAMPLEPEGEL:
+8 verdoppelt, 12 verdreifacht die Samplekanäle.
 
 ## KRAN – Blitter, Register ab `$00:C600`
 

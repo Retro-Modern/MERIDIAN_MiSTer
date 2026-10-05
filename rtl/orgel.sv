@@ -35,6 +35,8 @@
 //    $40/$41 ECKE (11 Bit)
 //    $42     Resonanz (oben), Stimmen durchs Filter (unten, Bit n = Stimme n)
 //    $43     Bit 4 Tief, 5 Band, 6 Hoch; Bits 0-3 Gesamtlautstaerke
+//    $44     SAMPLEPEGEL n (0-15): die vier Samplekanaele mal n/4 (Etappe 15;
+//            nach dem Einschalten 4 = wie eine Stimme)
 //   Samplekanal k = 0..3 ab $80 + k*$10:
 //    +0..+2 START  +3/+4 LAENGE  +5/+6 SCHLEIFE (Ruecksprung, ab Start)
 //    +E / +F      LAENGE / SCHLEIFE Bits 16-23 (Etappe 15); +3 bzw. +5
@@ -93,6 +95,7 @@ reg  [7:0] s_pan  [0:3];
 reg [10:0] f_ecke;
 reg  [7:0] f_rf;                    // Resonanz / Filterstimmen
 reg  [7:0] f_modus;
+reg  [3:0] k_pegel;                 // Samplepegel n/4
 
 reg [23:0] k_start [0:3];
 reg [23:0] k_len   [0:3];
@@ -131,6 +134,7 @@ always @(posedge clk) begin
 				4'h1: f_ecke[10:8] <= reg_din[2:0];
 				4'h2: f_rf         <= reg_din;
 				4'h3: f_modus      <= reg_din;
+				4'h4: k_pegel      <= reg_din[3:0];
 				default: ;
 			endcase
 		end
@@ -175,6 +179,7 @@ always @(posedge clk) begin
 		end
 		f_rf    <= 8'h00;
 		f_modus <= 8'h0F;
+		k_pegel <= 4'd4;
 		k_halt  <= 4'hF;
 	end
 end
@@ -484,9 +489,13 @@ always @(posedge clk) begin
 			            (f_modus[6] ? f_hoch : 28'sd0)) >>> 8);
 		end
 		4'd7: begin
-			// Samples: +-128 * 63 * 15 / 64 = +-1890, so laut wie eine Stimme
-			k_l <= (22'(k_sl[0]) + 22'(k_sl[1]) + 22'(k_sl[2]) + 22'(k_sl[3])) >>> 6;
-			k_r <= (22'(k_sr[0]) + 22'(k_sr[1]) + 22'(k_sr[2]) + 22'(k_sr[3])) >>> 6;
+			// Samples: +-128 * 63 * 15 / 64 = +-1890 - so laut wie eine Stimme -,
+			// dazu mal SAMPLEPEGEL / 4. Ein Trommelschlag hat diese Spitze nur
+			// einen Augenblick, ein Synth-Ton haelt sie: daher der Regler.
+			k_l <= 22'(((26'(k_sl[0]) + 26'(k_sl[1]) + 26'(k_sl[2]) + 26'(k_sl[3])) *
+			            $signed({1'b0, k_pegel})) >>> 8);
+			k_r <= 22'(((26'(k_sr[0]) + 26'(k_sr[1]) + 26'(k_sr[2]) + 26'(k_sr[3])) *
+			            $signed({1'b0, k_pegel})) >>> 8);
 		end
 		4'd8: begin
 			summe_l <= s_l + roh + k_l;

@@ -23,7 +23,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | Memory | 16 MB: 256 KB chip RAM + 15.7 MB expansion RAM (MiSTer SDRAM) |
 | Graphics (PINSEL) | 320×240, two layers; each is text (40/80 columns), scrolling tiles, or a bitmap with 16 or 256 colours (256 out of 4096) |
 | Sprites (KOBOLD) | 32 sprites of 16×16 (or 32×32 doubled), 16 colours, no per-line limit, collision detection |
-| Sound (ORGEL) | 4 synth voices (ADSR, filter) + 4 sample channels, stereo; samples play straight from chip RAM or expansion RAM, up to 16 MB each |
+| Sound (ORGEL) | 4 synth voices (ADSR, filter) + 4 sample channels, stereo; samples play straight from chip RAM or expansion RAM, up to 16 MB each; sample level against the synths adjustable (`$C544`) |
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
 | Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card as drive 3 |
 | Network (DRAHT) | TCP, HTTP(S), file download and disk creation from BASIC, served by a small Python service on the MiSTer |
