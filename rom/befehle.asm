@@ -39,8 +39,6 @@ AM         = AJOB+15            ;   Modus
 ; Chip-RAM fuer VERLAUF und SAMPLE (Bank 3, hinter der BASIC-Grafik)
 VL_TAB     = $032C00            ; Farbe je Zeile, 240 x 2 Byte
 VL_LISTE   = $032E00            ; Copper-Liste, 240 x 16 Byte + ENDE
-SA_PUFFER  = $034000            ; je Samplekanal 12 KB
-SA_GROESSE = $3000
 
 KOB_TAB    = $C300
 KOB_MADR   = $C400
@@ -579,8 +577,8 @@ _nein
 ;----------------------------------------------------------------------------
 ; SAMPLE k[, adr, laenge[, hz[, laut[, schleife]]]] - Samplekanal k (0-3)
 ; spielt laenge Bytes ab adr (8 Bit mit Vorzeichen) mit hz (Vorgabe 22050),
-; laut 0-63 (Vorgabe 63), schleife <> 0: immer wieder. Liegt das Sample im
-; Zusatzspeicher, holt KRAN es erst in den Puffer des Kanals (bis 12 KB).
+; laut 0-63 (Vorgabe 63), schleife <> 0: immer wieder. Seit Etappe 15
+; spielt die ORGEL auch direkt aus dem Zusatzspeicher (bis 16 MB lang).
 ; Nur k: anhalten.
 sample
 	.as
@@ -603,60 +601,11 @@ sample
 	bcc _f
 	cmp #7
 	bcs _f
-	lda P_WERT+8                ; Laenge 1..65535
-	bne _f
-	lda P_WERT+6
+	lda P_WERT+6                ; Laenge 1 bis 16 MB
 	ora P_WERT+7
+	ora P_WERT+8
 	beq _f
-	lda P_WERT+5                ; im Zusatzspeicher?
-	cmp #4
-	bcc _chip
-	#akku16
-	lda P_WERT+6
-	cmp #SA_GROESSE+1
-	bcs _f
-	sta AW
-	lda P_WERT+3
-	sta AQ
-	#akku8
-	lda P_WERT+5
-	sta AQ+2
-	#akku16
-	txa                         ; Puffer = SA_PUFFER + k * $3000
-	lsr a
-	lsr a
-	lsr a
-	lsr a                       ; k
-	sta tmp
-	asl a
-	adc tmp                     ; k * 3
-	xba
-	asl a
-	asl a
-	asl a
-	asl a                       ; k * $3000
-	clc
-	adc #<>SA_PUFFER
-	sta AZ
-	sta P_WERT+3                ; ORGEL spielt aus dem Puffer
-	lda #1
-	sta AH
-	stz AQA
-	stz AZA
-	#akku8
-	lda #`SA_PUFFER
-	sta AZ+2
-	sta P_WERT+5
-	stz AWERT
-	stz AM
-	phx
-	ldy #0
-	jsr auftrag
-	jsr kran_los
-	plx
-_chip
-	#akku8
-	lda P_WERT+3                ; START
+	lda P_WERT+3                ; START (Chip-RAM oder Zusatzspeicher)
 	sta ORG_KANAL+0,x
 	lda P_WERT+4
 	sta ORG_KANAL+1,x
@@ -666,7 +615,9 @@ _chip
 	sta ORG_KANAL+3,x
 	lda P_WERT+7
 	sta ORG_KANAL+4,x
-	stz ORG_KANAL+5,x           ; SCHLEIFE: zurueck zum Anfang
+	lda P_WERT+8                ; Bits 16-23 (nach +3)
+	sta ORG_KANAL+$e,x
+	stz ORG_KANAL+5,x           ; SCHLEIFE: zurueck zum Anfang (+F mit)
 	stz ORG_KANAL+6,x
 	lda P_ANZ                   ; SCHRITT = hz * 4295 / 65536
 	cmp #4

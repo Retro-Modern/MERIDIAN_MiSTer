@@ -75,7 +75,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$00:C801–$00:CFFF` | sonst: weitere Chips (liest `$FF`) |
 | `$00:D000–$00:FFFF` | Kern-ROM, Vektoren ab `$FFE4` |
 | `$01:0000–$01:FFFF` | RAM Bank 1; mit BASIC: Datenbank (Kopie des BASIC-Codes `$2000–$47FF`, Programm, Variablen und Zeichenketten `$4800–$FFFF`) |
-| `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), SAMPLE-Puffer `$03:4000–$03:FFFF` (je Kanal 12 KB) |
+| `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), frei ab `$03:4000` (bis Etappe 14 SAMPLE-Puffer) |
 | `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab |
 | `$FD:0000–$FD:FFFF` | DRAHT: 64 KB DDR3 (physisch `$3E100000`), nur für die CPU; Postfach zum Netzdienst (Etappe 12) |
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
@@ -495,18 +495,29 @@ ein 23-Bit-Schieberegister wie im SID, die Hüllkurve klingt exponentiell ab.
 
 | Versatz | Name | |
 |---|---|---|
-| `+0..+2` | START | Adresse im Chip-RAM (24 Bit) |
-| `+3/+4` | LÄNGE | Bytes, bis 64 KB |
-| `+5/+6` | SCHLEIFE | Rücksprungpunkt ab Start |
+| `+0..+2` | START | Adresse (24 Bit): Bänke 0–3 Chip-RAM, ab `$04` Zusatzspeicher (Etappe 15) |
+| `+3/+4` | LÄNGE | Bytes (Bits 0–15) |
+| `+5/+6` | SCHLEIFE | Rücksprungpunkt ab Start (Bits 0–15) |
 | `+7/+8` | SCHRITT | Abspielrate = SCHRITT · 15,26 Hz (22 050 Hz ≙ 1445) |
 | `+9` | LAUT | 0–63 |
 | `+A` | PAN | wie bei den Stimmen |
 | `+B` | STEUER | schreiben: Bit 0 = 1 startet von vorn, 0 hält an; Bit 1 Schleife. Lesen: Bit 0 = spielt |
-| `+C/+D` | POS | lesen: Position im Sample |
+| `+C/+D` | POS | lesen: Position im Sample (Bits 0–15) |
+| `+E` | LÄNGE / POS | schreiben: LÄNGE Bits 16–23 (Etappe 15); lesen: POS Bits 16–23 |
+| `+F` | SCHLEIFE | schreiben: SCHLEIFE Bits 16–23 |
+
+`+3` setzt LÄNGE Bits 16–23 auf 0, `+5` ebenso SCHLEIFE – ältere Programme
+merken nichts davon; wer längere Samples spielt, schreibt `+E`/`+F` danach.
+Ein Sample darf so bis 16 MB lang sein.
 
 Samples sind 8 Bit mit Vorzeichen. ORGEL holt jedes Byte per DMA aus dem
 Chip-RAM in dem Systemtakt, den die CPU nie benutzt (sie liest erst im
-dritten). **Pegel:** eine Stimme allein bei voller Lautstärke etwa
+dritten). **Aus dem Zusatzspeicher** (Etappe 15) – das konnte Paula mit dem
+Fast-RAM des Amiga nie: Dort holt ORGEL je Zugriff ein ganzes Wort, jeder
+Kanal merkt es sich und fragt erst für das nächste Wort wieder; am SDRAM
+hat sie Vorrang vor CPU und KRAN (nur das Laden durch BOTE geht vor).
+Selbst vier Kanäle mit 44 kHz brauchen nur rund 90 000 Zugriffe in der
+Sekunde – ein paar Prozent dessen, was das SDRAM schafft. **Pegel:** eine Stimme allein bei voller Lautstärke etwa
 −16 dBFS, ein Samplekanal genauso laut; erst wenn alle acht zugleich ganz
 oben stehen, greift die Begrenzung.
 
@@ -832,7 +843,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `STAMP adr,x,y,b,h` | Bild (b×h Bytes, Farbe 0 durchsichtig) von adr – auch aus dem Zusatzspeicher – in die Grafik |
 | `SPRITE n[,x,y[,m[,f]]]` | Sprite n (0–31) bei x,y mit Muster m; f = Palettenbank + 16 spiegeln X + 32 Y + 64 hinter der Grafik + 128 doppelt groß; nur n: aus |
 | `PATTERN m,z,"…"` | Zeile z (0–15) von Muster m (0–127): 16 Hexziffern, eine je Pixel („.“ = durchsichtig) |
-| `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–3): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; aus dem Zusatzspeicher holt KRAN bis 12 KB selbst ins Chip-RAM; nur k: anhalten |
+| `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–3): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; spielt aus dem Chip-RAM oder direkt aus dem Zusatzspeicher, bis 16 MB lang (Etappe 15); nur k: anhalten |
 | `GRADIENT z1,r1,g1,b1,z2,r2,g2,b2` | Farbverlauf der Hintergrundfarbe von Zeile z1 bis z2 (Anteile 0–15), LOTSE setzt sie in jeder Zeile; mehrere Verläufe ergänzen sich; ohne Werte: aus |
 | `PLAY "noten"[,stimme]` | Musik im Hintergrund auf Stimme 1–4 (Vorgabe 1), siehe unten; leerer Text: Stimme still |
 | `MOUSE 1[,n]` / `MOUSE 0` | Mauszeiger (Pfeil, Sprite n, Vorgabe 0 = ganz vorn) an / aus |
@@ -1028,6 +1039,11 @@ mit den neuen Namen.
     Netzdienst stellt `games/MERIDIAN/files` als Laufwerk 3 bereit
     (`rom/ordner.asm`, `DRIVE 3`) – Dateien vom Rechner ohne Image hinein
     und heraus.
+15. Samples aus dem Zusatzspeicher ✔ (Simulation und Hardware, 05.10.2026):
+    ORGEL spielt Samples direkt aus dem SDRAM (Bänke `$04`–`$FF`), mit
+    Vorrang vor CPU und KRAN und einem Wortpuffer je Kanal; Länge und
+    Schleife 24 Bit (bis 16 MB je Sample). BASIC `SAMPLE` spielt direkt
+    von dort.
 
 **Ausblick** (die Ideensammlung dazu):
 

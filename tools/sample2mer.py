@@ -7,7 +7,7 @@ eine Ladeadresse (auch im Zusatzspeicher). Gibt die Laenge fuer SAMPLE aus.
         [--hz 22050] [--sekunden 0.4] [--pegel 0.95]
 
 In BASIC dann:  SAMPLE kanal, 65536*$21, laenge, hz
-(Aus dem Zusatzspeicher holt SAMPLE bis 12 KB selbst ins Chip-RAM.)
+(Seit Etappe 15 spielt die ORGEL direkt aus dem Zusatzspeicher, auch ueber 64 KB.)
 """
 import argparse
 import array

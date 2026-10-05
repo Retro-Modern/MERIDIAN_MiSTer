@@ -13,9 +13,12 @@
 //  Filter: Zustandsvariablenfilter (Tief-/Band-/Hochpass) mit Resonanz,
 //  Eckfrequenz 30 Hz - 12 kHz, jede Stimme einzeln durchs Filter.
 //
-//  Samplekanaele wie bei Paula: 8-Bit-Samples mit Vorzeichen aus dem
-//  Chip-RAM per DMA, Schrittweite 16 Bit (Abspielrate = S * 15,26 Hz),
-//  Laenge bis 64 KB, Schleife, Lautstaerke 0-63, Panorama.
+//  Samplekanaele wie bei Paula: 8-Bit-Samples mit Vorzeichen per DMA aus dem
+//  Chip-RAM (Baenke 0-3) oder - anders als Paula - aus dem Zusatzspeicher
+//  (Baenke $04-$FF, Etappe 15), Schrittweite 16 Bit (Abspielrate =
+//  S * 15,26 Hz), Laenge bis 16 MB, Schleife, Lautstaerke 0-63, Panorama.
+//  Aus dem Zusatzspeicher kommt je Zugriff ein ganzes Wort; jeder Kanal
+//  merkt es sich und holt erst fuer das naechste Wort wieder.
 //
 //  Register ab $00:C500 (Stimmen bewusst in SID-Reihenfolge):
 //   Stimme n = 0..3 ab $00 + n*$10:
@@ -34,11 +37,13 @@
 //    $43     Bit 4 Tief, 5 Band, 6 Hoch; Bits 0-3 Gesamtlautstaerke
 //   Samplekanal k = 0..3 ab $80 + k*$10:
 //    +0..+2 START  +3/+4 LAENGE  +5/+6 SCHLEIFE (Ruecksprung, ab Start)
+//    +E / +F      LAENGE / SCHLEIFE Bits 16-23 (Etappe 15); +3 bzw. +5
+//                 schreiben setzt sie auf 0 - also nach +3/+5 schreiben
 //    +7/+8 SCHRITT  +9 LAUT (0-63)  +A PAN
 //    +B STEUER    Bit 0 spielen, Bit 1 Schleife; Schreiben mit Bit 0 = 1
 //                 startet von vorn, mit Bit 0 = 0 haelt an.
 //                 Lesen: Bit 0 = spielt noch
-//    +C/+D        lesen: Position im Sample
+//    +C/+D        lesen: Position im Sample (+E: Bits 16-23)
 //============================================================================
 
 module orgel
@@ -51,13 +56,16 @@ module orgel
 	output reg  [7:0] reg_dout,
 	input             reg_we,
 
-	// Sample-DMA aufs Chip-RAM: dma_gnt sagt die Anfrage im selben Takt zu,
-	// dma_ack kommt einen Takt danach, dann liegen die Daten an
+	// Sample-DMA: dma_gnt sagt die Anfrage zu (Adresse gilt in diesem Takt),
+	// mit dma_ack liegen die Daten an - beim Chip-RAM einen Takt danach, beim
+	// Zusatzspeicher spaeter, dann mit dma_wort und dem ganzen Wort
 	output            dma_req,
-	output     [17:0] dma_addr,
+	output     [23:0] dma_addr,
 	input             dma_gnt,
 	input             dma_ack,
 	input       [7:0] dma_data,
+	input             dma_wort,
+	input      [15:0] dma_data16,
 
 	output reg signed [15:0] links,
 	output reg signed [15:0] rechts
@@ -87,8 +95,8 @@ reg  [7:0] f_rf;                    // Resonanz / Filterstimmen
 reg  [7:0] f_modus;
 
 reg [23:0] k_start [0:3];
-reg [15:0] k_len   [0:3];
-reg [15:0] k_loop  [0:3];
+reg [23:0] k_len   [0:3];
+reg [23:0] k_loop  [0:3];
 reg [15:0] k_schr  [0:3];
 reg  [5:0] k_laut  [0:3];
 reg  [7:0] k_pan   [0:3];
@@ -131,9 +139,15 @@ always @(posedge clk) begin
 				4'h0: k_start[rn][7:0]   <= reg_din;
 				4'h1: k_start[rn][15:8]  <= reg_din;
 				4'h2: k_start[rn][23:16] <= reg_din;
-				4'h3: k_len[rn][7:0]     <= reg_din;
+				4'h3: begin
+					k_len[rn][7:0]   <= reg_din;
+					k_len[rn][23:16] <= 8'd0;
+				end
 				4'h4: k_len[rn][15:8]    <= reg_din;
-				4'h5: k_loop[rn][7:0]    <= reg_din;
+				4'h5: begin
+					k_loop[rn][7:0]   <= reg_din;
+					k_loop[rn][23:16] <= 8'd0;
+				end
 				4'h6: k_loop[rn][15:8]   <= reg_din;
 				4'h7: k_schr[rn][7:0]    <= reg_din;
 				4'h8: k_schr[rn][15:8]   <= reg_din;
@@ -144,6 +158,8 @@ always @(posedge clk) begin
 					if (reg_din[0]) k_neu[rn]  <= 1'b1;
 					else            k_halt[rn] <= 1'b1;
 				end
+				4'hE: k_len[rn][23:16]   <= reg_din;
+				4'hF: k_loop[rn][23:16]  <= reg_din;
 				default: ;
 			endcase
 		end
@@ -286,47 +302,78 @@ end
 
 //////////////////////////////  Samplekanaele  //////////////////////////////
 
-reg [15:0] k_pos  [0:3];            // Index im Sample
+reg [23:0] k_pos  [0:3];            // Index im Sample
 reg [15:0] k_frac [0:3];            // Nachkommastellen
 reg        k_an   [0:3];
 reg        k_hol  [0:3];            // neues Byte noetig
 reg  [7:0] k_wert [0:3];
+reg        k_wok  [0:3];            // Wortpuffer (Zusatzspeicher) gueltig
+reg [22:0] k_wadr [0:3];
+reg [15:0] k_wdat [0:3];
 reg  [1:0] dma_k;                   // gerade bediente Anfrage
 reg        dma_busy;
 reg        dma_gew;                 // zugesagt, Daten kommen
+reg [22:0] dma_wa;                  // Wortadresse der zugesagten Anfrage
+
+// Adresse des naechsten Bytes je Kanal, und ob es im Wortpuffer steht
+wire [23:0] k_voll [0:3];
+wire  [3:0] k_treffer;
+genvar gk;
+generate for (gk = 0; gk < 4; gk = gk + 1) begin : kanal
+	assign k_voll[gk]    = k_start[gk] + k_pos[gk];
+	assign k_treffer[gk] = k_hol[gk] && k_wok[gk] && k_wadr[gk] == k_voll[gk][23:1];
+end endgenerate
+wire  [3:0] k_dma = {k_hol[3] && !k_treffer[3], k_hol[2] && !k_treffer[2],
+                     k_hol[1] && !k_treffer[1], k_hol[0] && !k_treffer[0]};
 
 reg [16:0] kf;
-reg [16:0] kp;
+reg [24:0] kp;
 integer    m;
 always @(posedge clk) begin
 	// Erst die DMA-Antwort, damit ein im selben Takt neu angefordertes Byte
-	// (Schritt weiter) nicht verloren geht
+	// (Schritt weiter) nicht verloren geht. Ein Wort aus dem Zusatzspeicher
+	// kommt in den Wortpuffer; das Byte liefert er im naechsten Takt.
 	if (dma_ack) begin
-		k_wert[dma_k] <= dma_data;
-		k_hol[dma_k]  <= 1'b0;
-		dma_busy      <= 1'b0;
-		dma_gew       <= 1'b0;
+		if (dma_wort) begin
+			k_wok[dma_k]  <= 1'b1;
+			k_wadr[dma_k] <= dma_wa;
+			k_wdat[dma_k] <= dma_data16;
+		end
+		else begin
+			k_wert[dma_k] <= dma_data;
+			k_hol[dma_k]  <= 1'b0;
+		end
+		dma_busy <= 1'b0;
+		dma_gew  <= 1'b0;
 	end
-	else if (dma_gnt) dma_gew <= 1'b1;
+	else if (dma_gnt) begin
+		dma_gew <= 1'b1;
+		dma_wa  <= dma_addr[23:1];
+	end
 	else if (!dma_busy) begin
-		if      (k_hol[0]) begin dma_k <= 2'd0; dma_busy <= 1'b1; end
-		else if (k_hol[1]) begin dma_k <= 2'd1; dma_busy <= 1'b1; end
-		else if (k_hol[2]) begin dma_k <= 2'd2; dma_busy <= 1'b1; end
-		else if (k_hol[3]) begin dma_k <= 2'd3; dma_busy <= 1'b1; end
+		if      (k_dma[0]) begin dma_k <= 2'd0; dma_busy <= 1'b1; end
+		else if (k_dma[1]) begin dma_k <= 2'd1; dma_busy <= 1'b1; end
+		else if (k_dma[2]) begin dma_k <= 2'd2; dma_busy <= 1'b1; end
+		else if (k_dma[3]) begin dma_k <= 2'd3; dma_busy <= 1'b1; end
 	end
 	for (m = 0; m < 4; m = m + 1) begin
+		if (k_treffer[m]) begin
+			k_wert[m] <= k_voll[m][0] ? k_wdat[m][15:8] : k_wdat[m][7:0];
+			k_hol[m]  <= 1'b0;
+		end
 		if (k_neu[m]) begin
-			k_an[m]   <= (k_len[m] != 16'd0);
-			k_pos[m]  <= 16'd0;
+			k_an[m]   <= (k_len[m] != 24'd0);
+			k_pos[m]  <= 24'd0;
 			k_frac[m] <= 16'd0;
 			k_hol[m]  <= 1'b1;
+			k_wok[m]  <= 1'b0;
 		end
 		else if (k_halt[m]) k_an[m] <= 1'b0;
 		else if (tick && k_an[m]) begin
 			kf = {1'b0, k_frac[m]} + {1'b0, k_schr[m]};
 			k_frac[m] <= kf[15:0];
 			if (kf[16]) begin
-				kp = {1'b0, k_pos[m]} + 17'd1;
+				kp = {1'b0, k_pos[m]} + 25'd1;
 				if (kp >= {1'b0, k_len[m]}) begin
 					if (k_schl[m]) begin
 						k_pos[m] <= k_loop[m];
@@ -335,7 +382,7 @@ always @(posedge clk) begin
 					else k_an[m] <= 1'b0;
 				end
 				else begin
-					k_pos[m] <= kp[15:0];
+					k_pos[m] <= kp[23:0];
 					k_hol[m] <= 1'b1;
 				end
 			end
@@ -348,13 +395,13 @@ always @(posedge clk) begin
 			k_an[m]   <= 1'b0;
 			k_hol[m]  <= 1'b0;
 			k_wert[m] <= 8'd0;
+			k_wok[m]  <= 1'b0;
 		end
 	end
 end
 
-wire [23:0] dma_voll = k_start[dma_k] + {8'd0, k_pos[dma_k]};
 assign dma_req  = dma_busy && !dma_gew;
-assign dma_addr = dma_voll[17:0];
+assign dma_addr = k_voll[dma_k];
 
 //////////////////////////////  Filter und Mischpult  ///////////////////////
 
@@ -482,6 +529,7 @@ always @* begin
 			4'hB: reg_dout = {7'd0, k_an[rn]};
 			4'hC: reg_dout = k_pos[rn][7:0];
 			4'hD: reg_dout = k_pos[rn][15:8];
+			4'hE: reg_dout = k_pos[rn][23:16];
 			default: ;
 		endcase
 	end

@@ -299,7 +299,11 @@ wire [17:0] lade_addr;
 wire  [7:0] lade_data;
 wire        lade_we;
 wire        lot_req, org_req, kran_req, kran_we;
-wire [17:0] lot_addr, org_addr;
+wire [17:0] lot_addr;
+wire [23:0] org_addr;
+wire        org_z = (org_addr[23:18] != 6'd0);           // Sample im Zusatzspeicher
+wire        g_org_z, a_org_z;            // ORGEL am Zusatzspeicher (siehe unten)
+reg  [15:0] z_q16_24;
 wire [23:0] kran_addr;
 wire  [7:0] kran_wdat;
 wire        kran_chip = (kran_addr[23:18] == 6'd0);   // Baenke 0-3: Chip-RAM
@@ -313,15 +317,15 @@ wire        cpu_liest = is_ram && (vda || vpa) && cpu_we_n;
 wire        frei = !halt && ((cyc == 2'd0) || (cyc == 2'd1 && !cpu_liest) ||
                              (cyc == 2'd2 && !(wr && is_ram)));
 wire        g_lot  = frei && lot_req;
-wire        g_org  = frei && !lot_req && org_req;
-wire        g_kran = frei && !lot_req && !org_req && kran_req && kran_chip;
+wire        g_org  = frei && !lot_req && org_req && !org_z;
+wire        g_kran = frei && !lot_req && !(org_req && !org_z) && kran_req && kran_chip;
 reg         a_lot, a_org, a_kran;
 always @(posedge clk) begin
 	a_lot  <= g_lot;
 	a_org  <= g_org;
 	a_kran <= g_kran && !kran_we;              // nur Lesen meldet Daten
 end
-wire [17:0] pa_addr = halt ? lade_addr : g_lot ? lot_addr : g_org ? org_addr :
+wire [17:0] pa_addr = halt ? lade_addr : g_lot ? lot_addr : g_org ? org_addr[17:0] :
                       g_kran ? kran_addr[17:0] : cpu_ram_a;
 wire  [7:0] pa_din  = halt ? lade_data : g_kran ? kran_wdat : cpu_dout;
 wire        pa_we   = halt ? lade_we   : g_kran ? kran_we : (wr && is_ram);
@@ -466,9 +470,11 @@ orgel orgel
 	.reg_we(we_org),
 	.dma_req(org_req),
 	.dma_addr(org_addr),
-	.dma_gnt(g_org),
-	.dma_ack(a_org),
+	.dma_gnt(g_org || g_org_z),
+	.dma_ack(a_org || a_org_z),
 	.dma_data(ram_q),
+	.dma_wort(a_org_z),
+	.dma_data16(z_q16_24),
 	.links(audio_l),
 	.rechts(audio_r)
 );
@@ -543,6 +549,10 @@ lotse lotse
 //
 // Steckt ein Modul, ist $40:0000-$7F:FFFF ROM: Schreibzugriffe der CPU und
 // von KRAN gelten sofort als erledigt, ohne das SDRAM zu beruehren.
+//
+// Vorrang am SDRAM: BOTE, dann ORGEL (Samples aus dem Zusatzspeicher, Etappe
+// 15 - sonst knackt es), dann CPU, dann KRAN. Die ORGEL bekommt das ganze
+// Wort und laesst den Wortpuffer der CPU in Ruhe.
 wire        zus_zugriff = is_zus && (vda || vpa) && !halt;
 wire        cpu_schutz  = zus_zugriff && !cpu_we_n && modul_da && a[23:22] == 2'b01;
 wire        kran_schutz = kran_req && !kran_chip && kran_we && modul_da && kran_addr[23:22] == 2'b01;
@@ -553,13 +563,12 @@ reg   [7:0] z_din;
 wire        z_ack_t;
 wire  [7:0] z_q;
 wire [15:0] z_q16;
-reg  [15:0] z_q16_24;
 reg         wp_gueltig;                 // Wortpuffer
 reg  [22:0] wp_adr;
 reg  [15:0] wp_daten;
 reg         z_ack24;
 reg         z_laeuft;                   // ein Auftrag ist unterwegs ...
-reg         z_wer;                      // ... von 0: CPU, 1: KRAN
+reg   [1:0] z_wer;                      // ... von 0: CPU, 1: KRAN/BOTE, 2: ORGEL
 reg         z_cpu_an, z_cpu_da;         // CPU: Auftrag gestellt / Lesedaten da
 reg   [7:0] z_cpu_q;
 wire        z_erledigt = z_laeuft && (z_ack24 == z_req_t);
@@ -567,24 +576,26 @@ wire        z_bereit   = !z_laeuft || z_erledigt;
 // Treffer im Wortpuffer - nur, wenn der Kunde selbst keinen Lesezugriff
 // mehr unterwegs hat (sonst kaeme die Antwort in falscher Reihenfolge)
 wire        cpu_treffer  = zus_zugriff && cpu_we_n && wp_gueltig && a[23:1] == wp_adr && !z_cpu_an;
-wire        kran_liest_z = z_laeuft && z_wer && !z_we;
+wire        kran_liest_z = z_laeuft && z_wer == 2'd1 && !z_we;
 wire        kran_treffer = kran_req && !kran_chip && !kran_we && wp_gueltig &&
                            kran_addr[23:1] == wp_adr && !kran_liest_z;
 wire  [7:0] wp_byte_cpu  = a[0] ? wp_daten[15:8] : wp_daten[7:0];
 assign      g_bote_z   = bote_zreq && z_bereit;
-wire        z_cpu_geht = zus_zugriff && !cpu_treffer && !cpu_schutz && !z_cpu_an && z_bereit && cyc != 2'd2 && !g_bote_z;
-wire        g_kran_zs  = kran_req && !kran_chip && !kran_treffer && !kran_schutz && z_bereit && !z_cpu_geht && !g_bote_z;
+assign      g_org_z    = org_req && org_z && z_bereit && !g_bote_z;
+assign      a_org_z    = z_erledigt && z_wer == 2'd2;
+wire        z_cpu_geht = zus_zugriff && !cpu_treffer && !cpu_schutz && !z_cpu_an && z_bereit && cyc != 2'd2 && !g_bote_z && !g_org_z;
+wire        g_kran_zs  = kran_req && !kran_chip && !kran_treffer && !kran_schutz && z_bereit && !z_cpu_geht && !g_bote_z && !g_org_z;
 reg         a_kran_wp;                  // Treffer: Daten im naechsten Takt
 reg   [7:0] kran_wp_q;
 assign      g_kran_z   = g_kran_zs || kran_treffer || kran_schutz;
-assign      a_kran_z   = (z_erledigt && z_wer && !z_we) || a_kran_wp;
+assign      a_kran_z   = (z_erledigt && z_wer == 2'd1 && !z_we) || a_kran_wp;
 assign      kran_z_q   = a_kran_wp ? kran_wp_q : z_q24;
 // Kommt ein gelesenes Wort gerade an, gilt fuer Schreibzugriffe schon seine Adresse
-wire        wp_neu     = z_erledigt && !z_we;
+wire        wp_neu     = z_erledigt && !z_we && z_wer != 2'd2;
 wire        wp_g_n     = wp_neu || wp_gueltig;
 wire [22:0] wp_adr_n   = wp_neu ? z_adr[23:1] : wp_adr;
 // Lesedaten der CPU gelten schon in dem Takt, in dem sie ankommen (z_q24)
-wire        z_cpu_jetzt = z_erledigt && !z_wer && !z_we;
+wire        z_cpu_jetzt = z_erledigt && z_wer == 2'd0 && !z_we;
 assign      z_warten   = zus_zugriff && (cpu_we_n ? !(cpu_treffer || z_cpu_da || z_cpu_jetzt) : !(z_cpu_an || cpu_schutz));
 
 always @(posedge clk) begin
@@ -595,11 +606,11 @@ always @(posedge clk) begin
 	kran_wp_q <= kran_addr[0] ? wp_daten[15:8] : wp_daten[7:0];
 	if (z_erledigt) begin
 		z_laeuft <= 1'b0;
-		if (!z_wer && !z_we) begin
+		if (z_wer == 2'd0 && !z_we) begin
 			z_cpu_da <= 1'b1;
 			z_cpu_q  <= z_q24;
 		end
-		if (!z_we) begin                        // gelesenes Wort merken
+		if (!z_we && z_wer != 2'd2) begin       // gelesenes Wort merken
 			wp_gueltig <= 1'b1;
 			wp_adr     <= z_adr[23:1];
 			wp_daten   <= z_q16_24;
@@ -621,7 +632,14 @@ always @(posedge clk) begin
 		z_din    <= bote_zdata;
 		z_req_t  <= ~z_req_t;
 		z_laeuft <= 1'b1;
-		z_wer    <= 1'b1;
+		z_wer    <= 2'd1;
+	end
+	else if (g_org_z) begin
+		z_adr    <= org_addr;
+		z_we     <= 1'b0;
+		z_req_t  <= ~z_req_t;
+		z_laeuft <= 1'b1;
+		z_wer    <= 2'd2;
 	end
 	else if (z_cpu_geht) begin
 		z_adr    <= a;
@@ -629,7 +647,7 @@ always @(posedge clk) begin
 		z_din    <= cpu_dout;
 		z_req_t  <= ~z_req_t;
 		z_laeuft <= 1'b1;
-		z_wer    <= 1'b0;
+		z_wer    <= 2'd0;
 		z_cpu_an <= 1'b1;
 	end
 	else if (g_kran_zs) begin
@@ -638,7 +656,7 @@ always @(posedge clk) begin
 		z_din    <= kran_wdat;
 		z_req_t  <= ~z_req_t;
 		z_laeuft <= 1'b1;
-		z_wer    <= 1'b1;
+		z_wer    <= 2'd1;
 	end
 	if (cpu_ce && cpu_rdy) begin
 		z_cpu_an <= 1'b0;
