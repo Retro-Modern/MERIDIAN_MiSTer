@@ -499,11 +499,18 @@ _zeile
 	jsr setze
 	bra ++
 +	#akku8
-	lda #$06                    ; sonst ein leerer Befehl
+	lda #$01                    ; sonst ein leerer Befehl: dasselbe WARTE
+	sta [kz],y                  ; (Zeilenanfang) noch einmal - bis 06.10.2026
+	iny                         ; stand hier $06, seitdem ist das FARBE
+	lda zz
 	sta [kz],y
 	iny
+	lda zz+1
+	ora #$02
+	sta [kz],y
 	iny
-	iny
+	lda #$ff
+	sta [kz],y
 	iny
 +	#akku16
 	lda zz

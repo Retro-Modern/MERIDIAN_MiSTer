@@ -40,6 +40,12 @@
 //
 // MERIDIAN_TON=datei.raw schneidet den Ton von ORGEL mit: Stereo, 16 Bit mit
 // Vorzeichen, 48 kHz (ffmpeg -f s16le -ar 48000 -ac 2 -i datei.raw).
+//
+// MERIDIAN_FILM="befehl" gibt jedes Bild (640x240, RGB24 roh) an einen Befehl
+// weiter, ab Bild MERIDIAN_FILM_AB (Standard 0), z. B.
+//   MERIDIAN_FILM="ffmpeg -f rawvideo -pix_fmt rgb24 -s 640x240 -r 60 -i - -c:v ffv1 film.mkv"
+// Am Ende steht die gemessene Bildfrequenz in der Ausgabe (Ton dazu passend
+// mit MERIDIAN_TON, beide ab Bild 0 bzw. Takt 0).
 
 #include "Vmeridian_core.h"
 #include "verilated.h"
@@ -301,6 +307,9 @@ int main(int argc, char** argv) {
     if (!fenster) fenster = fenster_ram;
 
     FILE* ton = getenv("MERIDIAN_TON") ? fopen(getenv("MERIDIAN_TON"), "wb") : nullptr;
+    FILE* film = getenv("MERIDIAN_FILM") ? popen(getenv("MERIDIAN_FILM"), "w") : nullptr;
+    int film_ab = getenv("MERIDIAN_FILM_AB") ? atoi(getenv("MERIDIAN_FILM_AB")) : 0;
+    long film_bilder = 0;
     long ton_werte = 0;
 
     Sdram sdram;
@@ -578,6 +587,10 @@ int main(int argc, char** argv) {
                     fwrite(bild.data(), 1, bild.size(), f);
                     fclose(f);
                 }
+                if (film && frame >= film_ab) {
+                    fwrite(bild.data(), 1, bild.size(), film);
+                    film_bilder++;
+                }
                 if (frame == 2) printf("Bild 2: %d sichtbare Zeilen\n", y);
                 frame++;
                 y = 0;
@@ -605,6 +618,7 @@ int main(int argc, char** argv) {
         top->eval();
     }
     if (ton) { fclose(ton); printf("Ton: %ld Werte (%.2f s)\n", ton_werte, ton_werte / 48000.0); }
+    if (film) { pclose(film); printf("Film: %ld Bilder ab Bild %d\n", film_bilder, film_ab); }
 
     printf("Bilder: %d, CPU-Buszyklen: %ld (%.2f MHz)\n", frame, zyklen, zyklen / sekunden / 1e6);
     if (vs_abstand)
