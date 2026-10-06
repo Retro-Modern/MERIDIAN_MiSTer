@@ -20,6 +20,13 @@
 //   $03 al am ah         SPRUNG      weiter bei $ahamal
 //   $04 -  -  -          SIGNAL      Interrupt ausloesen (wenn erlaubt)
 //   $05 -  -  -          WARTE_KRAN  bis der Blitter KRAN fertig ist
+//   $06 n  gb r          FARBE       Paletteneintrag n = Farbe (gggg bbbb,
+//                                    ---- rrrr) in einem Befehl. Schreibt
+//                                    PINSELs eigenen Copper-Satz $C028-$C02A,
+//                                    nicht PAL_IDX der CPU - so kann ein
+//                                    Farbverlauf nie mehr ein PALETTE der CPU
+//                                    in den falschen Eintrag lenken (bis
+//                                    06.10.2026 mit drei SETZE auf $C008-$C00A)
 //  Zeilen in Bildreihenfolge: 240 .. letzte Zeile, dann 0 .. 239.
 //  Wirkung: Die Palette gilt sofort, Ebenen und Sprites ab der naechsten
 //  Zeile (PINSEL zeichnet jede Zeile eine Zeile im Voraus).
@@ -92,7 +99,7 @@ wire        neustart = ce_pix && hc == 10'd639 && v_next == 9'd240;
 //////////////////////////////  Vorab holen  ////////////////////////////////
 
 localparam [2:0] L_AUS = 3'd0, L_LAUF = 3'd1, L_WARTE = 3'd2, L_SETZE = 3'd3,
-                 L_WKRAN = 3'd4, L_ENDE = 3'd5, L_LEEREN = 3'd6;
+                 L_WKRAN = 3'd4, L_ENDE = 3'd5, L_LEEREN = 3'd6, L_FARBE = 3'd7;
 
 reg  [2:0] st;
 reg [17:0] fp;                      // naechste Leseadresse
@@ -101,7 +108,7 @@ reg  [7:0] fifo [0:7];
 reg  [2:0] wp, rp;
 reg  [3:0] cnt;
 
-wire holen = (st == L_LAUF || st == L_WARTE || st == L_SETZE || st == L_WKRAN);
+wire holen = (st == L_LAUF || st == L_WARTE || st == L_SETZE || st == L_WKRAN || st == L_FARBE);
 assign mem_req  = holen && (cnt + {3'd0, mem_ack} < 4'd8);
 assign mem_addr = fp;
 
@@ -115,10 +122,12 @@ wire [7:0] b3 = fifo[rp + 3'd3];
 reg [18:0] ziel;
 reg [10:0] w_addr;
 reg  [7:0] w_dat;
+reg  [7:0] f_n, f_gb, f_r;          // FARBE: Eintrag, gggg bbbb, ---- rrrr
+reg  [1:0] f_schritt;               // 0 Index, 1 gb, 2 r
 
-assign io_req  = (st == L_SETZE);
-assign io_addr = w_addr;
-assign io_dat  = w_dat;
+assign io_req  = (st == L_SETZE || st == L_FARBE);
+assign io_addr = (st == L_FARBE) ? {3'd0, 6'b001010, f_schritt} : w_addr;   // $C028 + Schritt
+assign io_dat  = (st == L_FARBE) ? (f_schritt == 2'd0 ? f_n : f_schritt == 2'd1 ? f_gb : f_r) : w_dat;
 assign laeuft  = (st != L_AUS && st != L_ENDE);
 
 wire       nimm   = (st == L_LAUF) && (cnt >= 4'd4);
@@ -158,11 +167,22 @@ always @(posedge clk) begin
 				end
 				8'h04: if (steuer[1]) irq_st <= 1'b1;
 				8'h05: st <= L_WKRAN;
+				8'h06: begin
+					f_n       <= b1;
+					f_gb      <= b2;
+					f_r       <= b3;
+					f_schritt <= 2'd0;
+					st        <= L_FARBE;
+				end
 				default: ;
 			endcase
 		end
 		L_WARTE: if (pos >= ziel) st <= L_LAUF;
 		L_SETZE: if (io_gnt) st <= L_LAUF;
+		L_FARBE: if (io_gnt) begin          // drei Buszugriffe hintereinander
+			if (f_schritt == 2'd2) st <= L_LAUF;
+			f_schritt <= f_schritt + 2'd1;
+		end
 		L_WKRAN: if (!kran_busy) st <= L_LAUF;
 		L_LEEREN: begin                    // kein Lesen in diesem Takt; FIFO leer
 			fp  <= fp_neu;

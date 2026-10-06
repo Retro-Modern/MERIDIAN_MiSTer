@@ -137,6 +137,7 @@ als Parallaxe.
 | `$08` | PAL_IDX | Palettenindex, zählt nach `PAL_HI` weiter |
 | `$09` | PAL_LO | `gggg bbbb` |
 | `$0A` | PAL_HI | `---- rrrr`, Schreiben übernimmt den Eintrag |
+| `$28–$2A` | – | derselbe Satz noch einmal **für LOTSE** (Befehl FARBE): eigener Index, eigenes Zwischenbyte. So stellen Copper und CPU sich beim Palettenschreiben nicht gegenseitig den Index um (seit 06.10.2026) |
 | `$0B` | IRQ_EN | Bit 0: Bildende (Zeile 240), Bit 1: Rasterzeile |
 | `$0C` | IRQ_ST | anstehende Ursachen; 1 schreiben löscht |
 | `$0D/$0E` | ZEILE | lesen: Rasterzeile; schreiben: Vergleichszeile |
@@ -169,6 +170,27 @@ Text 40 Zeichen ~450, Text 80 ~570, Kacheln ~575, Bitmap ~325 – zwei
 Kachelebenen also ~1150. Der Zeilenpuffer hält 320 Einträge zu je zwei
 Punkten, damit Grafikpixel in einem Takt doppelt breit geschrieben werden und
 Text mit 80 Zeichen trotzdem jeden Punkt einzeln setzen kann.
+
+**Umschalten mitten im Bild – die Adresse zählt ab Zeile 0.** PINSEL rechnet
+die Leseadresse jeder Zeile aus der *echten Schirmzeile* y (0–239), nicht ab
+der Stelle, an der LOTSE umgeschaltet hat:
+
+| Modus | gelesen wird für Zeile y |
+|---|---|
+| Text 40 / 80 | DATEN + (y / 8) × 80 bzw. × 160, Schriftzeile y mod 8 |
+| Kacheln | DATEN + ((y + SY) mod 256 / 8) × 128 |
+| Bitmap 16 | DATEN + y × 160 |
+| Bitmap 256 | DATEN + y × 320 |
+
+Wer ab Zeile z ein anderes Bild zeigen will – etwa eine Leiste unter einem
+Raumbild –, setzt DATEN deshalb auf *Anfang des Bildes − z × Zeilenbreite*.
+Beispiel: Raum als Bitmap 256 ab `$01:0000`, Leiste 320×64 als Bitmap 16 ab
+`$02:0000`. LOTSE setzt am Bildanfang A_TYP = 4 und A_DATEN = `$01:0000`, in
+der Austastlücke vor Zeile 175 (WARTE 175, `$1FF`) A_TYP = 3 und A_DATEN =
+`$02:0000` − 176 × 160 = `$01:9200`. Das wirkt ab Zeile 176, weil PINSEL eine
+Zeile vorauszeichnet. Vom Raumbild werden so nur die Zeilen 0–175 gelesen
+(56 320 statt 76 800 Byte), die Leiste braucht 10 240. In der Simulation
+punktgleich und auf dem MiSTer geprüft (06.10.2026).
 
 ## KOBOLD – Sprites, ab `$00:C300`
 
@@ -607,6 +629,9 @@ voraus und schreibt deshalb pixelgenau.
 | `$03 al am ah` SPRUNG | weiter bei `$ahamal` |
 | `$04 – – –` SIGNAL | Interrupt (wenn in STEUER erlaubt) |
 | `$05 – – –` WARTE_KRAN | bis der Blitter fertig ist |
+| `$06 n gb r` FARBE | Paletteneintrag n = Farbe (`gggg bbbb`, `---- rrrr`) in einem Befehl, über PINSELs Copper-Satz `$C028–$C02A` (seit 06.10.2026) |
+
+**Farben aus dem Copper nur mit FARBE.** Bis zum 06.10.2026 setzte GRADIENT die Hintergrundfarbe mit drei SETZE auf `PAL_IDX`/`PAL_LO`/`PAL_HI` – denselben Index, den die CPU (BASICs `PALETTE`) benutzt. Fiel eine Copper-Zeile zwischen die drei Schreibzugriffe der CPU, landeten Farben im falschen Eintrag, meist in Weiß (1); gefunden mit NEONFAHRT (Farbzyklus während eines Verlaufs). Eigene Copper-Listen, die per SETZE Farben schreiben, haben das Problem weiterhin – sie sollten FARBE nehmen.
 
 Zeilen in Bildreihenfolge: 240 … letzte Zeile, dann 0 … 239. **Wirkung:**
 Die Palette gilt sofort; Ebenen, Scrolling und Sprites ab der nächsten

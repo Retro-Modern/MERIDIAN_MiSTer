@@ -38,7 +38,7 @@ AM         = AJOB+15            ;   Modus
 
 ; Chip-RAM fuer VERLAUF und SAMPLE (Bank 3, hinter der BASIC-Grafik)
 VL_TAB     = $032C00            ; Farbe je Zeile, 240 x 2 Byte
-VL_LISTE   = $032E00            ; Copper-Liste, 240 x 16 Byte + ENDE
+VL_LISTE   = $032E00            ; Copper-Liste, 240 x 8 Byte + ENDE
 
 KOB_TAB    = $C300
 KOB_MADR   = $C400
@@ -860,36 +860,24 @@ vl_copper                        ; Copper-Liste aus VL_TAB bauen und starten
 	sta VL_LISTE+0,x
 	lda #$ff02
 	sta VL_LISTE+2,x
-	lda #$0802                  ; SETZE PAL_IDX = Farbe
-	sta VL_LISTE+4,x
-	lda VL_FARBE
+	; FARBE n, gggg bbbb, rrrr in einem Befehl (06.10.2026). Vorher waren es
+	; drei SETZE auf PAL_IDX/LO/HI - die verstellten den Index, den auch
+	; BASICs PALETTE benutzt, und Farben landeten im falschen Eintrag.
+	lda VL_FARBE                ; $06, n
 	xba
 	and #$ff00
-	ora #$00c0
-	sta VL_LISTE+6,x
-	phx                         ; Tabellenwert holen
+	ora #$0006
+	sta VL_LISTE+4,x
+	phx                         ; Tabellenwert holen: gggg bbbb, rrrr
 	lda zeiger
 	asl a
 	tax
 	lda VL_TAB,x
-	sta hilf
 	plx
-	lda #$0902                  ; SETZE PAL_LO = gggg bbbb
-	sta VL_LISTE+8,x
-	lda hilf
-	xba
-	and #$ff00
-	ora #$00c0
-	sta VL_LISTE+10,x
-	lda #$0a02                  ; SETZE PAL_HI = rrrr
-	sta VL_LISTE+12,x
-	lda hilf
-	and #$ff00
-	ora #$00c0
-	sta VL_LISTE+14,x
+	sta VL_LISTE+6,x
 	txa
 	clc
-	adc #16
+	adc #8
 	tax
 	inc zeiger
 	lda zeiger

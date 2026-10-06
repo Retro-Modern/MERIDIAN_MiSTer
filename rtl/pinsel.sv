@@ -28,6 +28,9 @@
 //   $08 PAL_IDX   Palettenindex (zaehlt nach PAL_HI hoch)
 //   $09 PAL_LO    gggg bbbb
 //   $0A PAL_HI    ---- rrrr  (Schreiben uebernimmt den Eintrag)
+//   $28-$2A       dasselbe noch einmal fuer LOTSE (Befehl FARBE): eigener
+//                 Index und eigenes Zwischenbyte, damit Copper und CPU sich
+//                 beim Palettenschreiben nicht den Index verstellen
 //   $0B IRQ_EN    Bit 0 Bildende (Zeile 240), Bit 1 Rasterzeile
 //   $0C IRQ_ST    gesetzte Ursachen; 1 schreiben loescht
 //   $0D/$0E       lesen: Rasterzeile, schreiben: Vergleichszeile. Die
@@ -104,6 +107,7 @@ reg  [8:0] sx     [0:1];
 reg  [7:0] sy     [0:1];
 
 reg  [7:0] pal_idx, pal_lo;
+reg  [7:0] cpal_idx, cpal_lo;                           // Satz fuer LOTSE
 reg  [1:0] irq_en, irq_st;
 reg  [8:0] ras_cmp, ras_line;
 reg  [7:0] frame;
@@ -127,6 +131,17 @@ always @(posedge clk) begin
 				pal_widx  <= pal_idx;
 				pal_wdata <= {reg_din[3:0], pal_lo};
 				pal_idx   <= pal_idx + 8'd1;
+			end
+			// $28-$2A: zweiter Satz fuer den Copper (gleicher Schreibweg in die
+			// Palette, aber eigener Index - vorher konnte eine Copper-Zeile
+			// zwischen PAL_IDX und PAL_HI der CPU fallen)
+			8'h28: cpal_idx <= reg_din;
+			8'h29: cpal_lo  <= reg_din;
+			8'h2A: begin
+				pal_we    <= 1'b1;
+				pal_widx  <= cpal_idx;
+				pal_wdata <= {reg_din[3:0], cpal_lo};
+				cpal_idx  <= cpal_idx + 8'd1;
 			end
 			8'h0B: irq_en       <= reg_din[1:0];
 			8'h0D: ras_cmp[7:0] <= reg_din;
@@ -162,12 +177,14 @@ always @(posedge clk) begin
 		irq_en    <= 2'b00;
 		ras_cmp   <= 9'd0;
 		pal_idx   <= 8'd0;
+		cpal_idx  <= 8'd0;
 	end
 end
 
 always @* begin
 	case (reg_addr)
 		8'h08:   reg_dout = pal_idx;
+		8'h28:   reg_dout = cpal_idx;
 		8'h0B:   reg_dout = {6'd0, irq_en};
 		8'h0C:   reg_dout = {6'd0, irq_st};
 		8'h0D:   reg_dout = ras_line[7:0];
