@@ -13,6 +13,9 @@ Made by [retro-modern.net](https://retro-modern.net), where you can also
 read how it was built. The full technical reference with every register and
 the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 
+**Community:** questions, bug reports and your own programs are welcome at
+**[forum.retro-modern.net](https://forum.retro-modern.net)** (English and German).
+
 ![MERIDIAN 816 boot screen](Screens/FirstBoot.png)
 
 ## At a glance
@@ -166,6 +169,13 @@ files. The file names are German.
   fills FAT16 disk images on a PC or Mac.
 
 Source comments, scripts and the documentation are in German.
+
+## Community
+
+Written something for MERIDIAN — a BASIC program, a demo, a tune? Show it in
+the forum at [forum.retro-modern.net](https://forum.retro-modern.net), category
+*MERIDIAN – Programs*. Questions, bugs and wishes for the core go to
+*MERIDIAN – Core & Wishes*. English and German are both fine.
 
 ## Credits and licenses
 
