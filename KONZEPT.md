@@ -492,6 +492,8 @@ ein 23-Bit-Schieberegister wie im SID, die Hüllkurve klingt exponentiell ab.
 | `$C542` | Resonanz (oben, 0–15) / welche Stimmen durchs Filter (unten, Bit n = Stimme n) |
 | `$C543` | Bit 4 Tiefpass, 5 Bandpass, 6 Hochpass (kombinierbar); Bits 0–3 Gesamtlautstärke |
 | `$C544` | SAMPLEPEGEL n (0–15): die Samplekanäle mal n/4 (Etappe 15; nach dem Einschalten 4) |
+| `$C545` | FILTER-ECHO 0–15: Anteil des Filterausgangs am Echo (Etappe 18) |
+| `$C546` | FILTER-ZERR 0–15: Verzerrung des Filterausgangs, 0 = aus (Etappe 18) – weich begrenzt wie die Verzerrung der Samplekanäle, aber hinter dem Filter; macht lauter |
 | `$C550/51` | ECHO-ZEIT in Abtastwerten zu 32 µs (1–32767, gut eine Sekunde; Etappe 16) |
 | `$C552` | ECHO-RÜCKKOPPLUNG 0–15 (n/16) |
 | `$C553` | ECHO-ANTEIL 0–15 (n/16), in die Mitte gemischt |

@@ -37,6 +37,9 @@
 //    $43     Bit 4 Tief, 5 Band, 6 Hoch; Bits 0-3 Gesamtlautstaerke
 //    $44     SAMPLEPEGEL n (0-15): die vier Samplekanaele mal n/4 (Etappe 15;
 //            nach dem Einschalten 4 = wie eine Stimme)
+//    $45     FILTER-ECHO 0-15: Anteil des Filterausgangs am Echo (Etappe 18)
+//    $46     FILTER-ZERR 0-15: Verzerrung des Filterausgangs (0 = aus) - wie
+//            ein Effektgeraet hinter dem Filter, vor Mischpult und Echo
 //   Echo ab $50 (Etappe 16; mono, 31,25 kHz, 16 Bit im Zusatzspeicher):
 //    $50/$51 ZEIT in Abtastwerten zu 32 us (1-32767, gut eine Sekunde)
 //    $52 RUECK 0-15 (Rueckkopplung n/16)  $53 ANTEIL 0-15 (n/16)
@@ -118,6 +121,8 @@ reg [10:0] f_ecke;
 reg  [7:0] f_rf;                    // Resonanz / Filterstimmen
 reg  [7:0] f_modus;
 reg  [3:0] k_pegel;                 // Samplepegel n/4
+reg  [3:0] f_send;                  // Filterausgang -> Echo (Etappe 18)
+reg  [3:0] f_drive;                 // Filterausgang verzerren
 reg  [2:0] x_bits  [0:7];           // Effekte je Samplekanal (Etappe 16)
 reg  [7:0] x_rate  [0:7];
 reg  [3:0] x_drive [0:7];
@@ -168,6 +173,8 @@ always @(posedge clk) begin
 				4'h2: f_rf         <= reg_din;
 				4'h3: f_modus      <= reg_din;
 				4'h4: k_pegel      <= reg_din[3:0];
+				4'h5: f_send       <= reg_din[3:0];
+				4'h6: f_drive      <= reg_din[3:0];
 				default: ;
 			endcase
 		end
@@ -235,6 +242,8 @@ always @(posedge clk) begin
 		f_rf    <= 8'h00;
 		f_modus <= 8'h0F;
 		k_pegel <= 4'd4;
+		f_send  <= 4'd0;
+		f_drive <= 4'd0;
 		e_zeit   <= 15'd0;
 		e_rueck  <= 4'd0;
 		e_anteil <= 4'd0;
@@ -641,6 +650,29 @@ generate
 	end
 endgenerate
 
+// Filterausgang verzerren (Etappe 18): mal (4 + 2d)/4, weich begrenzt wie
+// zerren() bei den Samplekanaelen - Knie bei 1536 (eine Stimme hat +-2048),
+// darueber Steigung 1/4, hoechstens 2560: der Pegel bleibt in allen Stufen
+// innerhalb von etwa +-2 dB, nur der Klang wird rauer. d = 0: unveraendert.
+function automatic signed [21:0] f_zerren(input signed [21:0] x, input [3:0] d);
+	reg signed [27:0] t;
+	reg        [27:0] a, y;
+	begin
+		if (d == 4'd0) f_zerren = x;
+		else begin
+			t = (28'(x) * ($signed({23'd0, d, 1'b0}) + 28'sd4)) >>> 2;
+			a = t[27] ? 28'(-t) : 28'(t);
+			y = (a <= 28'd1536) ? a : 28'd1536 + ((a - 28'd1536) >> 2);
+			if (y > 28'd2560) y = 28'd2560;
+			f_zerren = t[27] ? 22'(-y) : 22'(y);
+		end
+	end
+endfunction
+
+wire signed [21:0] roh_z = f_zerren(roh, f_drive);
+reg  signed [21:0] roh_m;           // verzerrter Filterausgang (Phase 7)
+wire signed [26:0] f_es  = 27'(roh_m) * $signed({1'b0, f_send}) * 27'sd4;
+
 function automatic signed [15:0] begrenzen(input signed [26:0] x);
 	if (x > 27'sd32767)       begrenzen = 16'sd32767;
 	else if (x < -27'sd32767) begrenzen = -16'sd32767;
@@ -693,15 +725,17 @@ always @(posedge clk) begin
 			k_r <= 22'(((26'(k_sr[0]) + 26'(k_sr[1]) + 26'(k_sr[2]) + 26'(k_sr[3]) +
 			             26'(k_sr[4]) + 26'(k_sr[5]) + 26'(k_sr[6]) + 26'(k_sr[7])) *
 			            $signed({1'b0, k_pegel})) >>> 8);
-			// Echo-Eingang in denselben Einheiten wie k_l bei SAMPLEPEGEL 4
-			e_sum <= 16'((k_es[0] + k_es[1] + k_es[2] + k_es[3] +
-			              k_es[4] + k_es[5] + k_es[6] + k_es[7]) >>> 6);
+			roh_m <= roh_z;
 			// Echo-Ausgang: mal ANTEIL/16 und mal SAMPLEPEGEL/4, in die Mitte
 			e_mix <= 22'((32'(e_wet) * $signed({1'b0, e_anteil}) * $signed({1'b0, k_pegel})) >>> 6);
 		end
 		4'd8: begin
-			summe_l <= s_l + roh + k_l + e_mix;
-			summe_r <= s_r + roh + k_r + e_mix;
+			summe_l <= s_l + roh_m + k_l + e_mix;
+			summe_r <= s_r + roh_m + k_r + e_mix;
+			// Echo-Eingang in denselben Einheiten wie k_l bei SAMPLEPEGEL 4,
+			// dazu der Filterausgang mal FILTER-ECHO/16 (Etappe 18)
+			e_sum <= 16'((27'(k_es[0]) + 27'(k_es[1]) + 27'(k_es[2]) + 27'(k_es[3]) +
+			              27'(k_es[4]) + 27'(k_es[5]) + 27'(k_es[6]) + 27'(k_es[7]) + f_es) >>> 6);
 		end
 		4'd9: begin
 			// Gesamtlautstaerke * 3/16: eine Stimme allein -16 dBFS, alle acht

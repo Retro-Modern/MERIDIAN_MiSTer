@@ -35,6 +35,9 @@
 // ein Programm ins nachgebildete DDR3-Postfach, wie tools/senden.py es auf
 // dem MiSTer tut.
 //
+// MERIDIAN_ABZUG="von-bis=datei,..." schreibt am Ende Bereiche des
+// Zusatzspeichers (hex, 24 Bit) in Dateien.
+//
 // MERIDIAN_TON=datei.raw schneidet den Ton von ORGEL mit: Stereo, 16 Bit mit
 // Vorzeichen, 48 kHz (ffmpeg -f s16le -ar 48000 -ac 2 -i datei.raw).
 
@@ -616,6 +619,29 @@ int main(int argc, char** argv) {
             if (f) { fwrite(disks[n].d.data(), 1, disks[n].d.size(), f); fclose(f); }
         }
     if (sd_auftraege) printf("Laufwerke: %ld Auftraege, %ld Bloecke\n", sd_auftraege, sd_bloecke);
+    // MERIDIAN_ABZUG="von-bis=datei,..." (hex, 24 Bit, Zusatzspeicher): am Ende
+    // diese Bytes aus dem SDRAM-Modell in Dateien schreiben (zum Vergleichen)
+    if (getenv("MERIDIAN_ABZUG")) {
+        std::string liste = getenv("MERIDIAN_ABZUG");
+        size_t a = 0;
+        while (a < liste.size()) {
+            size_t e = liste.find(',', a);
+            if (e == std::string::npos) e = liste.size();
+            std::string teil = liste.substr(a, e - a);
+            unsigned long von = 0, bis = 0;
+            size_t gl = teil.find('=');
+            if (gl != std::string::npos && sscanf(teil.c_str(), "%lx-%lx", &von, &bis) == 2 && bis >= von) {
+                FILE* f = fopen(teil.substr(gl + 1).c_str(), "wb");
+                for (unsigned long x = von; f && x <= bis; x++) {
+                    uint16_t w = sdram.mem[(x >> 1) & (sdram.mem.size() - 1)];
+                    fputc((x & 1) ? (w >> 8) : (w & 0xFF), f);
+                }
+                if (f) fclose(f);
+                printf("Abzug %06lX-%06lX -> %s\n", von, bis, teil.substr(gl + 1).c_str());
+            }
+            a = e + 1;
+        }
+    }
     top->final();
     delete top;
     return 0;
