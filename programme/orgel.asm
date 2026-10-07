@@ -13,6 +13,7 @@
 ;  Spieler in einem Schattenspeicher. Eine Taste beendet das Programm.
 ;
 ;  Daten vorher laden: programme/daten/orgel_klaenge.mer, orgel_musik.mer
+;  (fehlen sie, meldet ORGEL das und kehrt zurueck)
 ;  Assemblieren: programme/bauen.sh orgel
 ;============================================================================
 
@@ -29,6 +30,7 @@ akku16	.macro
 	.endm
 
 GETIN        = $FF83
+PRINT        = $FF86
 LOESCHEN     = $FF8F
 ORGEL_STILL  = $FF98
 BENUTZER_IRQ = $0300
@@ -46,6 +48,7 @@ PFO_TA     = $C114
 PFO_TASTEU = $C116
 ORG        = $C500
 MUSIK      = $020000
+PROBE_KLANG = $010010           ; Stichprobe der Samples (16 Byte)
 
 ; Direkte Seite (der Kern belegt $10-$54)
 strom    = $80                  ; 3 Byte: naechstes Byte im Musikstrom
@@ -75,7 +78,13 @@ start
 	.as
 	.xl
 	phb
-	sei
+	jsr daten_pruefen
+	bcc +
+	ldx #t_fehlt
+	jsr PRINT
+	plb
+	rtl
++	sei
 	jsr bild_aufbauen
 	lda #39                     ; Cursor in eine unsichtbare Ecke
 	sta CUR_X
@@ -147,6 +156,24 @@ haupt
 	cli
 	plb
 	rtl
+
+; Liegen die Daten im Speicher? Je 16 Byte mit den Dateien vergleichen,
+; aus denen sie stammen. C = 1: etwas fehlt
+daten_pruefen
+	ldx #15
+-	lda PROBE_KLANG,x
+	cmp soll_klang,x
+	bne _fehlt
+	lda MUSIK,x
+	cmp soll_musik,x
+	bne _fehlt
+	dex
+	bpl -
+	clc
+	rts
+_fehlt
+	sec
+	rts
 
 ;----------------------------------------------------------------------------
 ; Interrupt-Haken: A = PINSEL-Status. Timer A -> ein Takt Musik.
@@ -771,6 +798,15 @@ balken_hier
 ;----------------------------------------------------------------------------
 ; Daten
 
+; Stichproben aus den MER-Dateien (16 Byte Kopf)
+soll_klang
+	.binary "daten/orgel_klaenge.mer", 16 + (PROBE_KLANG - $010000), 16
+soll_musik
+	.binary "daten/orgel_musik.mer", 16 + (MUSIK - $020000), 16
+t_fehlt
+	.text 13, "ORGEL needs its data. Send first:", 13
+	.text "  daten/orgel_klaenge.mer", 13
+	.text "  daten/orgel_musik.mer", 13, 0
 alter_haken
 	.word 0
 

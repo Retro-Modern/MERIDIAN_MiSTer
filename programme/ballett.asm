@@ -16,7 +16,9 @@
 ;  Copper-Liste ab $DC00, KRAN-Auftragsliste ab $EF00.
 ;
 ;  Daten vorher laden: programme/daten/orgel_klaenge.mer, ballett_musik.mer,
-;  ballett_grafik.mer
+;  ballett_grafik.mer (fehlen sie, meldet BALLETT das und kehrt zurueck -
+;  ohne sie liefe es mit leerem Bild und stummer Musik, siehe Tagebuch
+;  07.10.2026)
 ;  Assemblieren: programme/bauen.sh ballett
 ;============================================================================
 
@@ -33,6 +35,7 @@ akku16	.macro
 	.endm
 
 GETIN        = $FF83
+PRINT        = $FF86
 LOESCHEN     = $FF8F
 ORGEL_STILL  = $FF98
 BENUTZER_IRQ = $0300
@@ -67,6 +70,8 @@ LOT_STEUER = $C703
 LOT_BEFEHLE = $C705
 
 MUSIK      = $004000
+PROBE_KLANG = $010010           ; Stichproben der Daten (je 16 Byte)
+PROBE_BALL = $01C380            ; Mitte des vierten Balls
 KOPPER     = $DC00              ; Copper-Liste in Bank 2/3
 KRANL      = $EF00              ; KRAN-Auftragsliste in Bank 2/3
 ZEILE      = 80                 ; Bytes je Textzeile
@@ -109,7 +114,13 @@ start
 	.as
 	.xl
 	phb
-	sei
+	jsr daten_pruefen
+	bcc +
+	ldx #t_fehlt
+	jsr PRINT
+	plb
+	rtl
++	sei
 	stz kz+2                    ; 16-Bit-Zugriffe auf DP-Zaehler: Hochbytes 0
 	stz anzahl+1
 	jsr bild_einrichten
@@ -256,6 +267,27 @@ ende
 	cli
 	plb
 	rtl
+
+; Liegen Samples, Musik und Grafik im Speicher? Je 16 Byte mit den Dateien
+; vergleichen, aus denen sie stammen. C = 1: etwas fehlt
+daten_pruefen
+	ldx #15
+-	lda PROBE_KLANG,x
+	cmp soll_klang,x
+	bne _fehlt
+	lda @l MUSIK,x
+	cmp soll_musik,x
+	bne _fehlt
+	lda PROBE_BALL,x
+	cmp soll_ball,x
+	bne _fehlt
+	dex
+	bpl -
+	clc
+	rts
+_fehlt
+	sec
+	rts
 
 ; bis zum naechsten Bildwechsel warten
 bild_abwarten
@@ -1114,6 +1146,17 @@ lastbalken
 
 alter_haken
 	.word 0
+soll_klang                      ; aus den MER-Dateien (16 Byte Kopf)
+	.binary "daten/orgel_klaenge.mer", 16 + (PROBE_KLANG - $010000), 16
+soll_musik
+	.binary "daten/ballett_musik.mer", 16, 16
+soll_ball
+	.binary "daten/ballett_grafik.mer", 16 + (PROBE_BALL - $01C000), 16
+t_fehlt
+	.text 13, "BALLETT needs its data. Send first:", 13
+	.text "  daten/orgel_klaenge.mer", 13
+	.text "  daten/ballett_musik.mer", 13
+	.text "  daten/ballett_grafik.mer", 13, 0
 zehner
 	.word 10000, 1000, 100, 10, 1
 farben                          ; Rasterbalken: 64 Zeilen lo, hi

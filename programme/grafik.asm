@@ -9,11 +9,13 @@
 ;  Je eine Taste schaltet weiter; danach zurueck in den Monitor.
 ;
 ;  Daten vorher laden: programme/daten/bild.mer, ebene_a.mer, ebene_b.mer
+;  (fehlen sie, meldet GRAFIK das und kehrt zurueck)
 ;============================================================================
 
 	.cpu "65816"
 
 GETIN        = $FF83
+PRINT        = $FF86
 BENUTZER_IRQ = $0300
 ZEICHEN      = $1800
 TEXT         = $3000            ; Textschirm fuer Ebene B
@@ -38,6 +40,9 @@ PIN_B_SX   = $C030
 PIN_B_SY   = $C032
 
 BILDPALETTE = $022C00
+PROBE_BILD = $017DB0            ; Stichproben der Daten (je 16 Byte)
+PROBE_A    = $030220
+PROBE_B    = $024880
 
 	* = $2000
 
@@ -45,7 +50,13 @@ start
 	.as
 	.xl
 	phb
-	sei
+	jsr daten_pruefen
+	bcc +
+	ldx #t_fehlt
+	jsr PRINT
+	plb
+	rtl
++	sei
 	rep #$20
 	.al
 	lda BENUTZER_IRQ
@@ -81,6 +92,27 @@ taste
 -	wai
 	jsr GETIN
 	beq -
+	rts
+
+; Liegen die Daten im Speicher? Je 16 Byte mit den Dateien vergleichen,
+; aus denen sie stammen. C = 1: etwas fehlt
+daten_pruefen
+	ldx #15
+-	lda PROBE_BILD,x
+	cmp soll_bild,x
+	bne _fehlt
+	lda PROBE_A,x
+	cmp soll_a,x
+	bne _fehlt
+	lda PROBE_B,x
+	cmp soll_b,x
+	bne _fehlt
+	dex
+	bpl -
+	clc
+	rts
+_fehlt
+	sec
 	rts
 
 ;----------------------------------------------------------------------------
@@ -349,6 +381,19 @@ texte1
 	.byte $ff
 
 	.include "grafik_daten.inc"
+
+; Stichproben aus den MER-Dateien (16 Byte Kopf)
+soll_bild
+	.binary "daten/bild.mer", 16 + (PROBE_BILD - $010000), 16
+soll_a
+	.binary "daten/ebene_a.mer", 16 + (PROBE_A - $030000), 16
+soll_b
+	.binary "daten/ebene_b.mer", 16 + (PROBE_B - $024000), 16
+t_fehlt
+	.text 13, "GRAFIK needs its data. Send first:", 13
+	.text "  daten/bild.mer", 13
+	.text "  daten/ebene_a.mer", 13
+	.text "  daten/ebene_b.mer", 13, 0
 
 alter_haken  .word 0
 zeit         .word 0

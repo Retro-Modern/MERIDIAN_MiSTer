@@ -134,8 +134,9 @@ BLOAD "BUFFER"
 
 ## Example programs
 
-`programme/` holds the demos as source and as ready-to-load `.MER`/`.BAS`
-files. The file names are German.
+`programme/` holds the demos as source, the assembler demos also as
+ready-to-load `.MER` files; the BASIC demos are on the demo disk. The file
+names are German.
 
 | | |
 |---|---|
@@ -152,6 +153,29 @@ files. The file names are German.
 | `counter.asm` | test cartridge (save data on drive 0) |
 | `montest.asm` | self-test: assembles and disassembles all 256 opcodes |
 | `krantest`, `dostest`, `ladetest`, `speichertest`, `zusatzdiag` | hardware tests from the build |
+
+Four assembler demos need their graphics, samples or music in memory
+first. Copy the `.MER` files from `programme/` and `programme/daten/` to
+`games/MERIDIAN/`, load the data files with *Load program* in the OSD, and
+the demo itself last (it starts on its own):
+
+| Demo | load first (from `programme/daten/`) |
+|---|---|
+| `grafik` | `bild.mer`, `ebene_a.mer`, `ebene_b.mer` |
+| `kobolde` | `ebene_a.mer`, `ebene_b.mer` |
+| `orgel` | `orgel_klaenge.mer`, `orgel_musik.mer` |
+| `ballett` | `orgel_klaenge.mer`, `ballett_musik.mer`, `ballett_grafik.mer` |
+
+If something is missing, the demo lists the files and returns to BASIC.
+
+`zusammenspiel` is on the demo disk together with its logo and sound:
+
+```basic
+BLOAD "ZSLOGO"
+BLOAD "ZSKLANG"
+LOAD "ZUSAMMEN"
+RUN
+```
 
 ## Building
 

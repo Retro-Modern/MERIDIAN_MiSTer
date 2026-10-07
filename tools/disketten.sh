@@ -21,6 +21,7 @@ python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/krantest.mer
 python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/dostest.mer
 python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/daten/zusammenspiel_logo.mer ZSLOGO.MER
 python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/daten/zusammenspiel_klang.mer ZSKLANG.MER
+python3 tools/bas.py rein programme/zusammenspiel.bas ZUSAMMEN.BAS --disk $ZIEL/MERIDIAN.DSK
 python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/ladetest.mer
 python3 tools/bas.py rein programme/starfall.bas STARFALL.BAS --disk $ZIEL/MERIDIAN.DSK
 python3 tools/bas.py rein programme/regenbogen.bas REGENBOG.BAS --disk $ZIEL/MERIDIAN.DSK
