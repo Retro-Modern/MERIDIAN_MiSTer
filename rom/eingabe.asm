@@ -427,15 +427,17 @@ sprites_an                      ; beim ersten Sprite: Tabelle leeren, KOBOLD an
 	lda SP_AN
 	bne _ende
 	phx
-	ldx #6
--	stz KOB_TAB,x
+	ldx #0
+-	stz KOB_TAB+4,x             ; Muster, Bank/Groesse und an: nichts von
+	stz KOB_TAB+5,x             ; einem vorigen Programm erben (SPRITE ohne
+	stz KOB_TAB+6,x             ; f behielt sonst z. B. dessen Bank)
 	#akku16
 	txa
 	clc
 	adc #8
 	tax
 	#akku8
-	cpx #6+32*8
+	cpx #32*8
 	bne -
 	plx
 	lda #1
