@@ -69,6 +69,7 @@ b_tabelle
 	.word maus_befehl, play_befehl, stille_befehl  ; 14 MOUSE, 15 PLAY, 16 SILENCE
 	.word net_befehl, dos_fehlertext               ; 17 NET, 18 Text zu DOS-Fehler
 	.word lied_befehl, lied_stopp                  ; 19 SONG, 20 SONG STOP (MERIDIAN 1.0)
+	.word glanz_befehl, leucht_befehl, tinte_befehl  ; 21 SHINE, 22 GLOW, 23 INK (PINSEL-Look)
 
 ; SONG "name"[,laufwerk]: TAKTSTOCK-Song laden und im Hintergrund spielen
 ; (ROM Bank $FF); A = 0 gut, 2-9 Fehler des DOS, 13 kein Song
@@ -93,6 +94,497 @@ lied_stopp
 	lda #1
 	jsl SONG_BEFEHL
 	jmp b_gut
+
+;----------------------------------------------------------------------------
+; PINSEL-Look (MERIDIAN 1.0): SHINE, GLOW, INK
+
+GL_TAB  = $FE1400               ; SHINE: Anzahl, dann je Punkt Farbe, Zeile, r, g, b
+GL_MAX  = 16                    ;   (8 Bit je Anteil), sortiert nach Farbe und Zeile
+GZ      = $02E1                 ; Hilfswerte (Seite 2, hinter SONG_AN)
+gz_n    = GZ+0                  ; 2: Punkte
+gz_k    = GZ+2                  ; 2: naechster Glanzkanal
+gz_i    = GZ+4                  ; 2: Versatz in GL_TAB
+gz_d    = GZ+6                  ; 2: Teilen: Dividend, danach Quotient
+gz_m    = GZ+8                  ; 2: Teiler (Zeilen)
+gz_t    = GZ+10                 ; 2: Zaehler
+gz_v    = GZ+12                 ; Vorzeichen
+gz_neu  = GZ+13                 ; 5: der neue Punkt (bis $02F2)
+
+; SHINE c,y,r,g,b: Glanzpunkt fuer Farbe c in Zeile y (Anteile 0-15 wie bei
+; PALETTE). Aus den Punkten einer Farbe macht der Kern Verlaeufe ohne Stufen:
+; ueber dem ersten Punkt dessen Farbe, zwischen zwei Punkten ein Verlauf,
+; unter dem letzten dessen Farbe. SHINE c: alle Punkte der Farbe c weg.
+; SHINE allein: alles aus. Hoechstens 16 Glanzkanaele.
+glanz_befehl
+	.as
+	lda P_ANZ
+	bne +
+	lda #0
+	sta @l GL_TAB
+	jmp glanz_bauen
++	jsr werte_byte              ; alle Werte 0-255?
+	bcs _f
+	lda P_ANZ
+	cmp #1
+	bne +
+	lda P_WERT
+	sta gz_neu
+	jmp glanz_weg
++	cmp #5
+	bne _f
+	lda P_WERT+3                ; Zeile 0-239
+	cmp #240
+	bcs _f
+	ldx #6                      ; Anteile 0-15, mal 17
+-	lda P_WERT,x
+	cmp #16
+	bcs _f
+	sta tmp
+	asl a
+	asl a
+	asl a
+	asl a
+	ora tmp
+	sta P_WERT,x
+	inx
+	inx
+	inx
+	cpx #15
+	bne -
+	ldx #0
+	ldy #0
+-	lda P_WERT,x                ; c, y, r, g, b nach gz_neu
+	sta gz_neu,y
+	inx
+	inx
+	inx
+	iny
+	cpy #5
+	bne -
+	jmp glanz_dazu
+_f	jmp b_fehler
+
+; C = 0, wenn alle Werte 0-255 sind
+werte_byte
+	.as
+	lda P_ANZ
+	sta gz_t
+	stz gz_t+1
+	ldx #0
+-	lda P_WERT+1,x
+	ora P_WERT+2,x
+	bne _nein
+	inx
+	inx
+	inx
+	dec gz_t
+	bne -
+	clc
+	rts
+_nein
+	sec
+	rts
+
+; Punkte der Farbe gz_neu entfernen
+glanz_weg
+	.as
+	jsr glanz_anzahl
+	ldx #1                      ; lesen
+	ldy #1                      ; schreiben
+	stz gz_t                    ; bleiben
+	stz gz_t+1
+-	lda gz_n
+	beq _ende
+	dec gz_n
+	lda @l GL_TAB,x
+	cmp gz_neu
+	beq _weg
+	jsr glanz_kopie5
+	inc gz_t
+	bra -
+_weg
+	inx
+	inx
+	inx
+	inx
+	inx
+	bra -
+_ende
+	lda gz_t
+	sta @l GL_TAB
+	jmp glanz_bauen
+
+; gz_n = Punkte in GL_TAB (eine kaputte Tabelle gilt als leer)
+glanz_anzahl
+	.as
+	lda @l GL_TAB
+	cmp #GL_MAX+1
+	bcc +
+	lda #0
+	sta @l GL_TAB
++	sta gz_n
+	stz gz_n+1
+	rts
+
+; 5 Byte von GL_TAB+X nach GL_TAB+Y, beide weiter
+glanz_kopie5
+	.as
+	lda #5
+	sta gz_v
+-	lda @l GL_TAB,x
+	phx
+	tyx
+	sta @l GL_TAB,x
+	plx
+	inx
+	iny
+	dec gz_v
+	bne -
+	rts
+
+; Punkt gz_neu einsortieren (gleiche Farbe und Zeile: ersetzen)
+glanz_dazu
+	.as
+	jsr glanz_anzahl
+	ldx #1
+	ldy #0                      ; Nummer des Punktes
+_suche
+	cpy gz_n
+	beq _einfuegen
+	lda @l GL_TAB,x             ; Farbe
+	cmp gz_neu
+	bcc _weiter
+	bne _einfuegen
+	lda @l GL_TAB+1,x           ; gleiche Farbe: Zeile
+	cmp gz_neu+1
+	bcc _weiter
+	bne _einfuegen
+	jsr glanz_setzen            ; gleiche Zeile: ersetzen
+	jmp glanz_bauen
+_weiter
+	inx
+	inx
+	inx
+	inx
+	inx
+	iny
+	bra _suche
+_einfuegen
+	lda gz_n
+	cmp #GL_MAX
+	bcc +
+	jmp b_fehler                ; voll
++	stx gz_i                    ; ab X alles um 5 nach hinten
+	#akku16
+	lda gz_n
+	asl a
+	asl a
+	adc gz_n                    ; n * 5
+	inc a                       ; hinter dem letzten Byte
+	tax
+	#akku8
+-	cpx gz_i
+	beq +
+	dex
+	lda @l GL_TAB,x
+	sta @l GL_TAB+5,x
+	bra -
++	jsr glanz_setzen
+	lda gz_n
+	inc a
+	sta @l GL_TAB
+	jmp glanz_bauen
+
+glanz_setzen                    ; gz_neu nach GL_TAB+X
+	.as
+	ldy #0
+-	lda gz_neu,y
+	sta @l GL_TAB,x
+	inx
+	iny
+	cpy #5
+	bne -
+	rts
+
+; Aus den Punkten die Glanzkanaele bauen und einschalten
+glanz_bauen
+	.as
+	stz PIN_GL_AN               ; waehrenddessen aus
+	stz PIN_GL_AN+1
+	stz gz_k
+	stz gz_k+1
+	jsr glanz_anzahl
+	ldx #1
+_punkt
+	lda gz_n
+	bne +
+	jmp _fertig
++	lda gz_k
+	cmp #16
+	bcc +
+	jmp _fertig
++	cpx #1                      ; erster Punkt seiner Farbe?
+	beq +
+	lda @l GL_TAB-5,x
+	cmp @l GL_TAB,x
+	beq _abschnitt
++	lda @l GL_TAB+1,x           ; ... nicht in Zeile 0: davor einfarbig
+	beq _abschnitt
+	dec a
+	sta tmp+1
+	lda #0
+	jsr glanz_fest
+	lda gz_k
+	cmp #16
+	bcc _abschnitt
+	jmp _fertig
+_abschnitt
+	lda gz_n
+	cmp #2
+	bcc _letzter
+	lda @l GL_TAB+5,x           ; naechster Punkt gleiche Farbe: Verlauf
+	cmp @l GL_TAB,x
+	bne _letzter
+	jsr glanz_verlauf
+	bra _naechster
+_letzter
+	lda #239                    ; bis zum Ende einfarbig
+	sta tmp+1
+	lda @l GL_TAB+1,x
+	jsr glanz_fest
+_naechster
+	inx
+	inx
+	inx
+	inx
+	inx
+	dec gz_n
+	jmp _punkt
+_fertig
+	#akku16                     ; Kanaele 0 .. k-1 an
+	lda #0
+	ldy gz_k
+	beq +
+-	sec
+	rol a
+	dey
+	bne -
++	sta PIN_GL_AN
+	#akku8
+	jmp b_gut
+
+; Kanal gz_k: Farbe des Punktes GL_TAB+X einfarbig, Zeilen A .. tmp+1
+glanz_fest
+	.as
+	sta tmp
+	lda gz_k
+	sta PIN_GLANZ
+	lda @l GL_TAB,x
+	sta PIN_GLANZ+1
+	lda tmp
+	sta PIN_GLANZ+2
+	lda tmp+1
+	sta PIN_GLANZ+3
+	lda @l GL_TAB+2,x
+	sta PIN_GLANZ+4
+	lda @l GL_TAB+3,x
+	sta PIN_GLANZ+5
+	lda @l GL_TAB+4,x
+	sta PIN_GLANZ+6
+	ldy #6                      ; kein Schritt ($47-$4C)
+	lda #0
+-	sta PIN_GLANZ+6,y
+	dey
+	bne -
+	inc gz_k
+	rts
+
+; Kanal gz_k: Verlauf vom Punkt GL_TAB+X bis eine Zeile vor den naechsten
+glanz_verlauf
+	.as
+	lda gz_k
+	sta PIN_GLANZ
+	lda @l GL_TAB,x
+	sta PIN_GLANZ+1
+	lda @l GL_TAB+1,x
+	sta PIN_GLANZ+2
+	lda @l GL_TAB+6,x           ; bis = naechste Zeile - 1
+	dec a
+	sta PIN_GLANZ+3
+	lda @l GL_TAB+6,x
+	sec
+	sbc @l GL_TAB+1,x
+	sta gz_m                    ; Zeilen (1-239)
+	stz gz_m+1
+	lda @l GL_TAB+2,x
+	sta PIN_GLANZ+4
+	lda @l GL_TAB+3,x
+	sta PIN_GLANZ+5
+	lda @l GL_TAB+4,x
+	sta PIN_GLANZ+6
+	phx
+	ldy #0                      ; je Anteil: Schritt = (b - a) * 256 / Zeilen
+_anteil
+	lda @l GL_TAB+7,x           ; Anteil des naechsten Punktes
+	sec
+	sbc @l GL_TAB+2,x           ; minus dieser
+	stz gz_v
+	bcs +
+	eor #$ff                    ; Betrag
+	inc a
+	inc gz_v
++	phy
+	jsr glanz_teilen            ; gz_d = Betrag * 256 / Zeilen
+	ply
+	lda gz_v
+	beq +
+	#akku16
+	lda gz_d
+	eor #$ffff
+	inc a
+	sta gz_d
+	#akku8
++	phy
+	#akku16                     ; (TAY nimmt auch das obere Byte mit)
+	tya
+	asl a                       ; Registerpaar $47 + 2 * Anteil
+	tay
+	#akku8
+	lda gz_d
+	sta PIN_GLANZ+7,y
+	lda gz_d+1
+	sta PIN_GLANZ+8,y
+	ply
+	inx
+	iny
+	cpy #3
+	bne _anteil
+	plx
+	inc gz_k
+	rts
+
+; gz_d = A * 256 / gz_m (16 Bit, hoechstens 32767)
+glanz_teilen
+	.as
+	stz gz_d                    ; Dividend A:00
+	sta gz_d+1
+	#akku16
+	lda #0                      ; Rest
+	ldy #16
+-	asl gz_d
+	rol a
+	cmp gz_m
+	bcc +
+	sbc gz_m
+	inc gz_d
++	dey
+	bne -
+	lda gz_d
+	bpl +
+	lda #$7fff
+	sta gz_d
++	#akku8
+	rts
+
+; GLOW s[,c ...]: Leuchten mit Staerke s (1-15), die Farben c leuchten;
+; GLOW 0 oder GLOW allein: aus, keine Farbe leuchtet mehr
+leucht_befehl
+	.as
+	lda P_ANZ
+	beq _aus
+	jsr werte_byte
+	bcs _f
+	lda P_WERT
+	cmp #16
+	bcs _f
+	cmp #0
+	beq _aus
+	sta PIN_LEUCHT
+	lda P_ANZ
+	dec a
+	beq _gut                    ; nur die Staerke
+	sta gz_t
+	ldx #3
+_farbe
+	lda P_WERT,x                ; Farbe c: Gruppe c/8, Bit c mod 8
+	lsr a
+	lsr a
+	lsr a
+	sta PIN_LM_IDX
+	#akku16                     ; (TAY nimmt auch das obere Byte mit)
+	lda P_WERT,x
+	and #$0007
+	tay
+	#akku8
+	lda #1
+_bit
+	dey
+	bmi +
+	asl a
+	bra _bit
++	ora PIN_LM_IDX+1            ; die anderen Bits der Gruppe bleiben
+	sta PIN_LM_IDX+1
+	inx
+	inx
+	inx
+	dec gz_t
+	bne _farbe
+_gut
+	jmp b_gut
+_aus
+	stz PIN_LEUCHT
+	stz PIN_LM_IDX
+	ldx #32
+-	stz PIN_LM_IDX+1
+	dex
+	bne -
+	jmp b_gut
+_f	jmp b_fehler
+
+; INK c[,dx[,dy[,b]]]: Tusche in Farbe c - Kontur um Sprites mit f + 256,
+; Schlagschatten der Sprites mit f + 512 (b = 1: auch der Ebene B), um dx
+; (0-7) und dy (1-7) versetzt; INK 0 oder INK allein: aus
+tinte_befehl
+	.as
+	lda P_ANZ
+	beq _aus
+	jsr werte_byte
+	bcs _f
+	lda P_WERT
+	beq _aus
+	sta PIN_TUSCHE+1
+	lda P_ANZ
+	cmp #2
+	bcc _an
+	lda P_WERT+3
+	cmp #8
+	bcs _f
+	sta PIN_TUSCHE+2
+	lda P_ANZ
+	cmp #3
+	bcc _an
+	lda P_WERT+6
+	beq _f
+	cmp #8
+	bcs _f
+	sta PIN_TUSCHE+3
+_an
+	lda #3                      ; Kontur und Schatten der Sprites
+	sta gz_v
+	lda P_ANZ
+	cmp #4
+	bcc +
+	lda P_WERT+9
+	beq +
+	lda #7                      ; dazu Ebene B
+	sta gz_v
++	lda gz_v
+	sta PIN_TUSCHE
+	jmp b_gut
+_aus
+	stz PIN_TUSCHE
+	jmp b_gut
+_f	jmp b_fehler
 
 play_befehl                     ; PLAY "noten"[,stimme] (Etappe 11, ROM Bank $FF)
 	.as
@@ -502,17 +994,22 @@ sprite
 	#akku8
 	lda P_ANZ
 	cmp #4
-	bcc +
+	bcc _an
 	lda P_WERT+9
 	and #$7f
 	sta KOB_TAB+4,x
 	lda P_ANZ
 	cmp #5
-	bcc +
+	bcc _an
 	lda P_WERT+12
 	sta KOB_TAB+5,x
-+	lda #1
-	sta KOB_TAB+6,x
+	lda P_WERT+13               ; f + 256 Kontur, + 512 Schatten (MERIDIAN 1.0,
+	and #3                      ; wirken mit INK)
+	asl a
+	ora #1
+	bra +
+_an	lda #1
++	sta KOB_TAB+6,x
 	jmp b_gut
 _f	jmp b_fehler
 

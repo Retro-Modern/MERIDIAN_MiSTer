@@ -55,7 +55,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 |---|---|
 | `$00:0000–$00:00FF` | direkte Seite: `$00–$0F` BASIC-Brücken, `$10–$54` Kern, `$55–$FF` BASIC |
 | `$00:0100–$00:01FF` | Stapel |
-| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
+| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0`, SHINE `$02E1–$02F1` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
 | `$00:0400–$00:0D9F` | Bildschirmspeicher (40×30 Zellen à 2 Byte; 80 Zeichen bis `$00:16BF`) |
 | `$00:16C0–$00:16FF` | Parameterblock des DOS (siehe DOS) |
 | `$00:1700–$00:17FF` | direkte Seite des DOS (`$00–$69`), von MUSIK (`$80–$BF` je Stimme 16 Byte, `$F0–$FE`) und NETZ (`$C0–$C7`); Monitor: Ausgabezeile `$17C8–$17EF`, drei Bytes ab `$176A` |
@@ -80,7 +80,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab |
 | `$FD:0000–$FD:FFFF` | DRAHT: 64 KB DDR3 (physisch `$3E100000`), nur für die CPU; Postfach zum Netzdienst (Etappe 12) |
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
-| `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`), Notentexte für PLAY (`$FE:1000–$FE:13FF`) |
+| `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
 | `$FF:0000–$FF:3FFF` | BASIC-ROM (16 KB) |
 | `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13) |
 | `$FF:8000–$FF:BFFF` | SONG-ROM (16 KB, MERIDIAN 1.0): der Abspieler von TAKTSTOCK für BASIC `SONG` – Befehl `$FF8000`, Takt `$FF8004`, Funktion `$FF8008` (`rom/song.asm`) |
@@ -147,6 +147,46 @@ als Parallaxe.
 | `$12` | A_SY | Scrolling Y 0–255 (Kacheln) |
 | `$20–$27` | B_… | Ebene B wie `$00–$07` |
 | `$30–$32` | B_SX, B_SY | Ebene B wie `$10–$12` |
+| `$34` | TUSCHE | MERIDIAN 1.0: Bit 0 Kontur um Sprites mit Kontur-Bit, Bit 1 Schlagschatten der Sprites mit Schatten-Bit, Bit 2 Schlagschatten von Ebene B |
+| `$35` | TINTE | Tuschefarbe der Kontur (Palettenindex; 0 = unsichtbar) |
+| `$36/$37` | SCHATTEN_X/Y | Versatz des Schlagschattens: X 0–7, Y 1–7 Zeilen (Vorgabe 2, 2) |
+| `$40` | GL_NR | Glanz: Kanal 0–15 für `$41–$4C` |
+| `$41` | GL_FARBE | Paletteneintrag, den der Kanal schreibt |
+| `$42/$43` | GL_VON/BIS | Zeilen 0–239 |
+| `$44–$46` | GL_START | Farbe in Zeile VON: rot, grün, blau je 0–255 |
+| `$47–$4C` | GL_SCHRITT | je Anteil 16 Bit (8.8 mit Vorzeichen, unten das Nachkomma-Byte): rot `$47/$48`, grün `$49/$4A`, blau `$4B/$4C` |
+| `$4D/$4E` | GL_AN | Bit n = Kanal n an (0–7, 8–15) |
+| `$50` | LM_IDX | Leuchten: Gruppe 0–31 der Leuchtmaske |
+| `$51` | LM_DATEN | 8 Leuchtbits (Farben LM_IDX·8 … +7, Bit 0 die erste); Schreiben zählt LM_IDX weiter |
+| `$52` | LEUCHTEN | Stärke 0–15, 0 = aus |
+
+**PINSEL-Look (MERIDIAN 1.0).** Drei Merkmale, die kein Rechner von damals
+hatte; zusammen mit der Palette MERIDIAN-256 geben sie MERIDIAN-Bildern einen
+eigenen Look. Nach dem Reset sind alle aus,
+der Kern schaltet sie beim Start, beim Fernstart und nach jedem Programm aus
+(`anzeige_zuruecksetzen`) – was vorher lief, sieht genauso aus wie bisher.
+
+- **Glanz:** 16 Kanäle. Ein Kanal schreibt in der waagrechten Austastlücke
+  vor jeder Zeile y von VON bis BIS die Farbe START + (y − VON) · SCHRITT in
+  seinen Paletteneintrag – 8 Bit je Anteil, Verläufe ohne Stufen. Die
+  Palette ist dafür intern 24 Bit breit; was die CPU schreibt (4 Bit je
+  Anteil), wird wie bisher verdoppelt. Mehrere Kanäle auf derselben Farbe
+  mit aneinanderliegenden Zeilen ergeben Verläufe mit Abschnitten; LOTSE
+  kann Kanäle unterwegs umstellen. Über HDMI 8 Bit je Anteil, am
+  Analogausgang 6.
+- **Leuchten:** Je Paletteneintrag ein Leuchtbit. Um Punkte in Leuchtfarben
+  legt PINSEL beim Ausgeben einen Lichthof – waagrecht ein Dreieck über ±15
+  Punkte (zwei Kastenfilter zu 16 Punkten, nur Additionen), senkrecht 1-2-1
+  über die Zeilen y−2 … y: Er sitzt eine Zeile tiefer, weil PINSEL nur eine
+  Zeile vorauszeichnet. Der Hof liegt auf den Nachbarn, Leuchtpunkte selbst
+  behalten ihre Farbe. Bild und Syncs laufen dafür 20 Punkte später hinaus.
+- **Tusche:** Eine Kontur von einem Schirmpunkt in der Tuschefarbe um Sprites
+  mit Kontur-Bit (KOBOLD, auch doppelt groß ein Punkt), dazu ein
+  Schlagschatten: Sprites mit Schatten-Bit werfen ihn auf beide Ebenen,
+  Ebene B (Bit 2) auf Ebene A; wo ein Sprite sichtbar ist, fällt keiner.
+  Schatten machen halb so hell. PINSEL merkt sich dafür die letzten acht
+  Zeilen (2 Bit je Punkt). Eine Kontur um Ebene B gibt es nicht – sie
+  bräuchte die Zeile, die PINSEL noch nicht gezeichnet hat.
 
 **Kachelkarte:** 64×32 Einträge zu 2 Byte: Bits 0–9 Kachelnummer (bis 1024),
 Bit 10 spiegeln X, Bit 11 spiegeln Y, Bits 12–15 Palettenbank. **Kachel:**
@@ -213,7 +253,7 @@ bei der Ausgabe wird gemischt.
 | +2/+3 | Y (9 Bit), Bildschirm-Y = Y − 32 |
 | +4 | Muster 0–127 |
 | +5 | Bits 0–3 Palettenbank, 4 spiegeln X, 5 spiegeln Y, 6 hinter Ebene B, 7 doppelt groß |
-| +6 | Bit 0: an |
+| +6 | Bit 0: an, Bit 1: Kontur, Bit 2: Schlagschatten (MERIDIAN 1.0; wirken nur mit dem Schalter TUSCHE `$C034`) |
 
 **Steuerung** ab `$C400`:
 
@@ -229,7 +269,11 @@ durchsichtig. Farbe = Bank × 16 + Wert.
 
 **Zeitbedarf** pro Zeile: 1 Takt je Sprite zum Prüfen, 2 zum Holen der
 Musterzeile, 16 (bzw. 32) zum Malen – höchstens rund 1120 der 1528 Takte,
-wenn alle 32 doppelt groß auf einer Zeile stehen.
+wenn alle 32 doppelt groß auf einer Zeile stehen. Mit Kontur holt KOBOLD
+drei Musterzeilen (die Zeile und ihre Nachbarn auf dem Schirm, 9 Takte) und
+malt 18 bzw. 34 Punkte; der Sprite reicht dann eine Zeile höher und tiefer.
+Randpunkte decken wie Spritepunkte, zählen aber nicht als Kollision. Alle 32
+doppelt groß mit Kontur auf einer Zeile: rund 1380 Takte.
 
 ## PFORTE – Register ab `$00:C100`
 
@@ -688,9 +732,31 @@ Wortpuffer 12 %). Alle 251 Bänke ohne einen Fehler.
 | 6 | blau | 238 | | 14 | hellblau | 8BF |
 | 7 | gelb | FE5 | | 15 | hellgrau | CCC |
 
-Die Farben **16–255** belegt der Kern mit einem Farbkreis aus 240 Tönen
-bei voller Sättigung: 16 rot, 56 gelb, 96 grün, 136 türkis, 176 blau,
-216 violett, dann zurück zu rot.
+## Palette MERIDIAN-256 (Farben 16–255, MERIDIAN 1.0)
+
+Die Farben **16–255** belegt der Kern mit **30 Farbfamilien zu 8 Stufen**
+(`tools/farben.py`, im ROM `rom/farben.inc`). Familie f liegt ab 16 + 8·f,
+Stufe 0 ist die dunkelste. Dunkle Stufen sind Richtung Blauviolett gedreht,
+helle Richtung Gelb – so schattieren Pixelkünstler von Hand: Schatten werden
+nie grau, Licht nie flach. Eine Palettenbank (16 Farben, Kacheln, Sprites,
+Bitmap 16) enthält genau zwei Familien. Bis MERIDIAN 1.0 lag hier ein
+Farbkreis aus 240 Tönen.
+
+| | | |
+|---|---|---|
+| 16 rot | 24 karmin | 32 orange |
+| 40 gold | 48 ocker | 56 holz |
+| 64 haut | 72 pfirsich | 80 oliv |
+| 88 gras | 96 wald | 104 smaragd |
+| 112 türkis | 120 petrol | 128 himmel |
+| 136 blau | 144 indigo | 152 violett |
+| 160 purpur | 168 magenta | 176 grau |
+| 184 stein | 192 warmgrau | 200 sand |
+| 208 ziegel | 216 lavendel | 224 mint |
+| 232 neonpink | 240 neoncyan | 248 neongrün |
+
+Gerechnet in OKLCH, auf 4 Bit je Kanal gerundet. `tools/bild2mer.py`
+wandelt Bilder in diese Palette.
 
 ## Zeichensatz
 
@@ -736,7 +802,7 @@ schaltet für die Dauer in den nativen Modus und zurück):
 | `$FFB5` | PUNKT: x `$0380` (16 Bit), y `$0382`, Farbe `$0386` |
 | `$FFB8` | LINIE: von `$0380/$0382` nach `$0383/$0385`, Farbe `$0386` |
 | `$FFBE` | Funktion A (0 MOUSE, 1 JOY, 2 KEY, 3 HIT, 4 CLOCK, 5 NET, 6/7 NET$, 8 SONG), Wert und Ergebnis als 24-Bit-Zahl mit Vorzeichen in `$00–$02` (Etappe 11, `rom/eingabe.asm`) |
-| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–13: DOS, Schleifen und SONG, 19 SONG, 20 SONG STOP), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
+| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–13: DOS, Schleifen und SONG, 19 SONG, 20 SONG STOP, 21 SHINE, 22 GLOW, 23 INK), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
 
 **Lange Einsprünge** für Code im System-ROM (Etappe 13; Aufruf per `JSL`,
 zurück mit `RTL`; Akku 8, Index 16 Bit, direkte Seite und Datenbank 0):
@@ -899,12 +965,15 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `MONITOR` | in den Maschinensprache-Monitor (zurück mit `BASIC`) |
 | `BLIT von,nach,länge` | Block kopieren mit KRAN, 24-Bit-Adressen, auch Zusatzspeicher und überlappend |
 | `STAMP adr,x,y,b,h` | Bild (b×h Bytes, Farbe 0 durchsichtig) von adr – auch aus dem Zusatzspeicher – in die Grafik |
-| `SPRITE n[,x,y[,m[,f]]]` | Sprite n (0–31) bei x,y mit Muster m; f = Palettenbank + 16 spiegeln X + 32 Y + 64 hinter der Grafik + 128 doppelt groß; nur n: aus. Der erste SPRITE nach dem Einschalten oder nach einem Maschinenprogramm leert die Tabelle (Muster, f, an), ohne m/f gilt dann 0 |
+| `SPRITE n[,x,y[,m[,f]]]` | Sprite n (0–31) bei x,y mit Muster m; f = Palettenbank + 16 spiegeln X + 32 Y + 64 hinter der Grafik + 128 doppelt groß + 256 Kontur + 512 Schlagschatten (mit INK); nur n: aus. Der erste SPRITE nach dem Einschalten oder nach einem Maschinenprogramm leert die Tabelle (Muster, f, an), ohne m/f gilt dann 0 |
 | `PATTERN m,z,"…"` | Zeile z (0–15) von Muster m (0–127): 16 Hexziffern, eine je Pixel („.“ = durchsichtig) |
 | `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–7): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; spielt aus dem Chip-RAM oder direkt aus dem Zusatzspeicher, bis 16 MB lang (Etappe 15); nur k: anhalten |
 | `GRADIENT z1,r1,g1,b1,z2,r2,g2,b2` | Farbverlauf der Hintergrundfarbe von Zeile z1 bis z2 (Anteile 0–15), LOTSE setzt sie in jeder Zeile; mehrere Verläufe ergänzen sich; ohne Werte: aus |
 | `PLAY "noten"[,stimme]` | Musik im Hintergrund auf Stimme 1–4 (Vorgabe 1), siehe unten; leerer Text: Stimme still |
 | `SONG "name"[,lw]` / `SONG STOP` | TAKTSTOCK-Song (`NAME.TAK`) laden und im Hintergrund spielen / anhalten (MERIDIAN 1.0), siehe unten |
+| `SHINE c,y,r,g,b` | Glanzpunkt: Farbe c hat in Zeile y die Farbe r,g,b (0–15); zwischen den Punkten einer Farbe ein Verlauf ohne Stufen, über dem ersten und unter dem letzten deren Farbe. `SHINE c`: Punkte der Farbe c weg, `SHINE`: alles aus. Höchstens 16 Glanzkanäle (je Farbe Punkte + 1, wenn der erste nicht in Zeile 0 liegt) |
+| `GLOW s[,c…]` | Leuchten mit Stärke s (1–15), die Farben c leuchten (bis zu 7 je Befehl, weitere mit dem nächsten GLOW); `GLOW 0` oder `GLOW`: aus, keine Farbe leuchtet mehr |
+| `INK c[,dx,dy[,b]]` | Tusche in Farbe c: Kontur um Sprites mit f + 256, Schlagschatten der Sprites mit f + 512 (b = 1: auch der Grafik/Ebene B), versetzt um dx (0–7) und dy (1–7, Vorgabe 2, 2); `INK 0` oder `INK`: aus |
 | `MOUSE 1[,n]` / `MOUSE 0` | Mauszeiger (Pfeil, Sprite n, Vorgabe 0 = ganz vorn) an / aus |
 | `NET "befehl"[,k]` | Auftrag an den Netzdienst, Kanal k (0–4), siehe unten |
 | `IF b THEN … ELSE …` | Etappe 13: ELSE gilt für das nächste IF davor in derselben Zeile; `IF A THEN 100 ELSE 200` springt |
@@ -993,6 +1062,19 @@ Fehler der Laufwerke meldet BASIC mit eigenen Texten: `?FILE NOT FOUND`,
 `?FILE TOO BIG`, `?BAD FILE NAME` (jeweils mit „ERROR“), die Schleifen
 `?WEND WITHOUT WHILE`, `?WHILE WITHOUT WEND`, `?UNTIL WITHOUT REPEAT` und
 `?NOT A SONG` (SONG).
+
+**SHINE, GLOW und INK** (MERIDIAN 1.0, der PINSEL-Look) wirken auf alle
+Ebenen und Sprites. Ein Beispiel ist `programme/abend.bas` (auf der
+Vorführdiskette `ABEND.BAS`): Himmel und See mit SHINE, Mond, Sterne, Fenster
+und Laterne mit GLOW, die Figur mit Kontur und Schatten. Alle drei bleiben
+nach dem Programmende stehen, bis sie ausgeschaltet werden oder ein
+Maschinenprogramm startet.
+
+```basic
+SHINE 128,0,1,1,4:SHINE 128,131,15,11,6     : REM Himmel, Farbe 128
+GLOW 9,47,207                                : REM Sterne und Mond leuchten
+INK 144,2,2:SPRITE 0,177,168,0,128+256+512   : REM Figur mit Kontur und Schatten
+```
 
 **ELSE, WHILE und REPEAT** (Etappe 13): ELSE muss einen eigenen Befehl
 beginnen, sonst nähme `PRINT 1 ELSE` das ELSE für einen Teil seines

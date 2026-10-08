@@ -17,6 +17,7 @@ HIER = os.path.dirname(os.path.abspath(__file__))
 BASIS = os.path.join(HIER, "..")
 sys.path.insert(0, os.path.join(BASIS, "tools"))
 from bild2mer import mer, startpalette      # noqa: E402
+from farben import nummer                   # noqa: E402
 
 LOGO, KLANG = 0x200000, 0x210000
 
@@ -26,6 +27,12 @@ def logo():
     font = open(os.path.join(BASIS, "rom", "zeichensatz.bin"), "rb").read()
     w, h = 256, 32
     bild = [[0] * w for _ in range(h)]
+    # gelb oben, rot unten: je Schriftzeile eine Stufe aus MERIDIAN-256
+    # (bis MERIDIAN 1.0 ein Verlauf aus dem Farbkreis, 56 -> 25)
+    stufen = [nummer(f, k) for f, k in (("gold", 6), ("gold", 5), ("orange", 6), ("orange", 5),
+                                        ("orange", 4), ("rot", 5), ("rot", 4), ("rot", 3))]
+    verlauf = [stufen[yy // 4] for yy in range(h)]
+    schrift = set()
     for i, ch in enumerate("MERIDIAN"):
         for y in range(8):
             byte = font[ord(ch) * 8 + y]
@@ -34,10 +41,11 @@ def logo():
                     for dy in range(4):
                         for dx in range(4):
                             yy, xx = y * 4 + dy, i * 32 + x * 4 + dx
-                            bild[yy][xx] = 56 - yy                 # gelb oben, rot unten
+                            bild[yy][xx] = verlauf[yy]             # gelb oben, rot unten
+                            schrift.add((yy, xx))
     for y in range(h - 1, 0, -1):                                  # Schatten
         for x in range(w - 1, 0, -1):
-            if bild[y][x] == 0 and 16 <= bild[y - 1][x - 1] <= 56:
+            if bild[y][x] == 0 and (y - 1, x - 1) in schrift:
                 bild[y][x] = 11
     return w, h, bytes(v for zeile in bild for v in zeile)
 

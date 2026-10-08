@@ -25,6 +25,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | CPU | 65C816 at 8 MHz |
 | Memory | 16 MB: 256 KB chip RAM + 15.7 MB expansion RAM (MiSTer SDRAM) |
 | Graphics (PINSEL) | 320×240, two layers; each is text (40/80 columns), scrolling tiles, or a bitmap with 16 or 256 colours (256 out of 4096) |
+| The PINSEL look | the MERIDIAN-256 start palette (30 colour families of 8 shades), plus three things no machine of the time had: *shine* – 16 palette entries with smooth vertical gradients at 8 bits per channel, *glow* – a light halo around colours marked as luminous, *ink* – a one-pixel outline around sprites and drop shadows of sprites and layer B. All off after reset; see below |
 | Sprites (KOBOLD) | 32 sprites of 16×16 (or 32×32 doubled), 16 colours, no per-line limit, collision detection |
 | Sound (ORGEL) | 4 synth voices (ADSR, filter) + 8 sample channels, stereo; samples play straight from chip RAM or expansion RAM, up to 16 MB each; per sample channel a bit crusher, distortion and a route through the filter; an echo/delay of up to 1 s in expansion RAM; the filter output (synth voices included) can be distorted and sent into the echo (`$C545`/`$C546`); sample level against the synths adjustable (`$C544`) |
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
@@ -58,6 +59,10 @@ with programs and variables in their own 64 KB bank. MERIDIAN adds:
 
 - **Screen:** `CLS` `COLOR` `MODE 40/80` `GRAPHIC` `PLOT` `LINE`
   `PALETTE` `GRADIENT`
+- **The PINSEL look:** `SHINE c,y,r,g,b` (gradient stops for colour c),
+  `GLOW s[,c…]` (glow strength and luminous colours), `INK c[,dx,dy[,b]]`
+  (outline and shadow colour; sprites opt in with `SPRITE …,f` + 256 outline,
+  + 512 shadow)
 - **Sprites and blitter:** `SPRITE` `PATTERN` `STAMP` `BLIT`
 - **Sound:** `SOUND` `SILENCE` `SAMPLE` (channels 0–7, also straight from
   expansion RAM, e.g. `SAMPLE 0,2097152,80000`) `PLAY` (a music macro language that
@@ -179,6 +184,27 @@ BLOAD "ZSKLANG"
 LOAD "ZUSAMMEN"
 RUN
 ```
+
+## The PINSEL look
+
+A new computer needs a look of its own, or its pictures look like VGA or
+SNES. MERIDIAN's comes from four parts: the start palette MERIDIAN-256
+(colours 16–255 are 30 families of 8 shades, darks turned towards blue
+violet and lights towards yellow, the way pixel artists shade by hand) and
+three PINSEL features – smooth gradients (*shine*), light halos (*glow*) and
+ink outlines with drop shadows (*ink*). Pixels and palettes like back then,
+gradients, glow and outlines like no machine of the time.
+
+`ABEND.BAS` on the demo disk paints an evening at a lake with all of it:
+
+```basic
+LOAD "ABEND"
+RUN
+```
+
+The registers are in `KONZEPT.md` (PINSEL `$C034–$C052`, KOBOLD byte +6). All
+three features are off after reset and whenever a program is started, so
+existing software looks exactly as before.
 
 ## Music with SONG
 

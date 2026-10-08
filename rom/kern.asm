@@ -46,6 +46,11 @@ PIN_PLO    = $C009
 PIN_PHI    = $C00A
 PIN_IRQEN  = $C00B
 PIN_IRQST  = $C00C
+PIN_TUSCHE = $C034              ; MERIDIAN 1.0: Kontur/Schatten, Tinte, Versatz X/Y
+PIN_GLANZ  = $C040              ; Glanz: NR, Kanal $41-$4C, AN $4D/$4E
+PIN_GL_AN  = $C04D
+PIN_LM_IDX = $C050              ; Leuchten: Maske (Index, Daten), Staerke
+PIN_LEUCHT = $C052
 
 ; PFORTE (Ein-/Ausgabe)
 PFO_TASTE  = $C100
@@ -169,6 +174,7 @@ zeichensatz
 palette                         ; MERIDIAN-16: gggg bbbb, ---- rrrr
 	.byte $00,$0, $ff,$f, $33,$d, $dd,$5, $4d,$a, $c4,$4, $38,$2, $e5,$f
 	.byte $92,$f, $52,$9, $88,$f, $44,$4, $88,$8, $f9,$9, $bf,$8, $cc,$c
+	.include "farben.inc"           ; 16-255 (tools/farben.py)
 
 	.include "tastatur.inc"
 
@@ -446,7 +452,26 @@ anzeige_zuruecksetzen
 	inx
 	cpx #32
 	bne -
-	jsr regenbogen
+	ldx #0                      ; 16-255: MERIDIAN-256, 30 Farbfamilien
+-	lda farben256,x             ; (der Index zaehlt von 16 weiter)
+	sta PIN_PLO
+	lda farben256+1,x
+	sta PIN_PHI
+	inx
+	inx
+	cpx #480
+	bne -
+	stz PIN_TUSCHE              ; PINSEL-Look aus: keine Kontur, kein Schatten,
+	stz PIN_GL_AN               ; keine Glanzkanaele, kein Leuchten - ein
+	stz PIN_GL_AN+1             ; Programm findet PINSEL wie vor MERIDIAN 1.0
+	stz PIN_LEUCHT
+	stz PIN_LM_IDX
+	ldx #32
+-	stz PIN_LM_IDX+1            ; Leuchtmaske leeren (zaehlt selbst weiter)
+	dex
+	bne -
+	lda #0                      ; keine Glanzpunkte (SHINE)
+	sta @l GL_TAB
 	lda #1
 	sta PIN_A_TYP
 	lda spalten
@@ -1499,70 +1524,6 @@ grafik_setzen
 
 grafik_loeschen                 ; KRAN-Auftrag: 320 x 240 ab $02:0000 mit 0 fuellen
 	.byte 0, 0, 0, 0, 0, 2, <320, >320, 240, 0, 0, 0, <320, >320, 0, 1
-
-; Palette 16-255: Farbkreis mit 240 Toenen (rot - gelb - gruen - tuerkis -
-; blau - violett - rot), volle Saettigung. Sechs Abschnitte zu 40 Schritten;
-; je Abschnitt ist jeder Farbanteil fest 0, fest 15, steigend oder fallend.
-regenbogen
-	#akku8
-	lda #16
-	sta PIN_PIDX
-	ldy #0                      ; Abschnitt * 3
-_abschnitt
-	ldx #0                      ; Schritt 0-39
-_schritt
-	lda rb_auf,x
-	sta tmp                     ; steigend
-	eor #$0f
-	sta tmp+1                   ; fallend
-	lda rb_art+1,y              ; gruen
-	jsr _anteil
-	asl a
-	asl a
-	asl a
-	asl a
-	sta hilf
-	lda rb_art+2,y              ; blau
-	jsr _anteil
-	ora hilf
-	sta PIN_PLO
-	lda rb_art,y                ; rot
-	jsr _anteil
-	sta PIN_PHI
-	inx
-	cpx #40
-	bne _schritt
-	iny
-	iny
-	iny
-	cpy #18
-	bne _abschnitt
-	rts
-_anteil                         ; 0 = 0, 1 = 15, 2 = steigend, 3 = fallend
-	cmp #2
-	bcs +
-	lsr a
-	lda #0
-	bcc _fertig
-	lda #15
-_fertig
-	rts
-+	beq +
-	lda tmp+1
-	rts
-+	lda tmp
-	rts
-
-rb_auf                          ; round(k * 15 / 40)
-	.byte 0, 0, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 6, 6, 6, 7, 7
-	.byte 8, 8, 8, 9, 9, 9, 10, 10, 10, 11, 11, 12, 12, 12, 13, 13, 14, 14, 14, 15
-rb_art                          ; rot, gruen, blau je Abschnitt
-	.byte 1, 2, 0               ; rot -> gelb
-	.byte 3, 1, 0               ; gelb -> gruen
-	.byte 0, 1, 2               ; gruen -> tuerkis
-	.byte 0, 3, 1               ; tuerkis -> blau
-	.byte 2, 0, 1               ; blau -> violett
-	.byte 1, 0, 3               ; violett -> rot
 
 ; Punkt GP_X, GP_Y in Farbe GP_F (ausserhalb: nichts)
 punkt

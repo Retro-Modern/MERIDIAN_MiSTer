@@ -8,6 +8,7 @@ basic/bauen.sh
 cd $HIER
 python3 tools/zeichensatz.py
 python3 tools/tastatur.py
+python3 tools/farben.py
 iconv -f UTF-8 -t ISO-8859-1 rom/kern.asm > rom/kern.latin1.asm
 ( cd rom && 64tass --long-branch -b -q -o kern.bin -L kern.lst kern.latin1.asm )
 rm rom/kern.latin1.asm

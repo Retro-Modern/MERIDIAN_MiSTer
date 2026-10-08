@@ -279,6 +279,9 @@ M_RESLST
 	.shift "UNTIL"
 	.shift "RENUMBER"            ; Etappe 13b: Zeilen neu nummerieren
 	.shift "SONG"                ; MERIDIAN 1.0: TAKTSTOCK-Songs (Befehl und Funktion)
+	.shift "SHINE"               ; MERIDIAN 1.0, PINSEL-Look: Glanz, Leuchten, Tusche
+	.shift "GLOW"
+	.shift "INK"
 	.byte 0
 M_RESENDE
 
@@ -294,6 +297,7 @@ M_STMDSP
 	.word M_NET-1
 	.word REM-1, M_WHILE-1, M_WEND-1, M_REPEAT-1, M_UNTIL-1  ; ELSE: Rest der Zeile weg
 	.word M_RENUMBER-1, M_SONG-1
+	.word M_SHINE-1, M_GLOW-1, M_INK-1
 M_ANZAHL = (* - M_STMDSP) / 2
 M_ERSTE  = 24                   ; Token-Index von MOUSE, der ersten Funktion
 M_FANZ   = 7                    ; MOUSE JOY KEY HIT CLOCK NET$ NET
@@ -308,7 +312,7 @@ IFTK     = GOTOTK+2             ; Microsofts Liste: GOTO RUN IF
 RUNTK    = GOTOTK+1
 STOPTK   = REMTK+1              ; Microsofts Liste: REM STOP
 SONGTK   = GOTK+1+37            ; MERIDIAN 1.0
-	.cerror M_ANZAHL != 38, "Liste geaendert: ELSE muss Eintrag 31 bleiben, SONG 37"
+	.cerror M_ANZAHL != 41, "Liste geaendert: ELSE muss Eintrag 31 bleiben, SONG 37"
 
 	.cerror GOTK+M_ANZAHL > $ff, "zu viele Token"
 
@@ -1835,6 +1839,22 @@ rn_w_minus
 	dec RN_W+1
 +	dec RN_W
 	rts
+
+; MERIDIAN 1.0, PINSEL-Look: SHINE c,y,r,g,b (Glanz), GLOW s[,c ...]
+; (Leuchten), INK c[,dx,dy[,b]] (Tusche) - die Arbeit macht der Kern
+; (Befehle 21-23); ohne Werte schaltet jeder seinen Teil aus
+M_SHINE
+	ldx #5
+	ldy #21
+	jmp M_ALLG
+M_GLOW
+	ldx #8
+	ldy #22
+	jmp M_ALLG
+M_INK
+	ldx #4
+	ldy #23
+	jmp M_ALLG
 
 ERW_ENDE
 
