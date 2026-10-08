@@ -282,6 +282,10 @@ M_RESLST
 	.shift "SHINE"               ; MERIDIAN 1.0, PINSEL-Look: Glanz, Leuchten, Tusche
 	.shift "GLOW"
 	.shift "INK"
+	.shift "MAP"                 ; MERIDIAN 1.0, Werkstatt: Karten aus Kacheln
+	.shift "TILE"                ;   (Befehl und Funktion)
+	.shift "SFX"                 ;   Klaenge
+	.shift "LOOK"                ;   Look und Zeichensatz der Werkstatt
 	.byte 0
 M_RESENDE
 
@@ -298,6 +302,7 @@ M_STMDSP
 	.word REM-1, M_WHILE-1, M_WEND-1, M_REPEAT-1, M_UNTIL-1  ; ELSE: Rest der Zeile weg
 	.word M_RENUMBER-1, M_SONG-1
 	.word M_SHINE-1, M_GLOW-1, M_INK-1
+	.word M_MAP-1, M_TILE-1, M_SFX-1, M_LOOK-1
 M_ANZAHL = (* - M_STMDSP) / 2
 M_ERSTE  = 24                   ; Token-Index von MOUSE, der ersten Funktion
 M_FANZ   = 7                    ; MOUSE JOY KEY HIT CLOCK NET$ NET
@@ -312,7 +317,8 @@ IFTK     = GOTOTK+2             ; Microsofts Liste: GOTO RUN IF
 RUNTK    = GOTOTK+1
 STOPTK   = REMTK+1              ; Microsofts Liste: REM STOP
 SONGTK   = GOTK+1+37            ; MERIDIAN 1.0
-	.cerror M_ANZAHL != 41, "Liste geaendert: ELSE muss Eintrag 31 bleiben, SONG 37"
+TILETK   = GOTK+1+42
+	.cerror M_ANZAHL != 45, "Liste geaendert: ELSE muss Eintrag 31 bleiben, SONG 37, TILE 42"
 
 	.cerror GOTK+M_ANZAHL > $ff, "zu viele Token"
 
@@ -710,6 +716,9 @@ M_FUNKTION
 	bne +
 	lda #8
 	bra _wert
++	cmp #TILETK-GOTK-1-M_ERSTE  ; TILE(l,x,y): mehrere Werte
+	bne +
+	jmp M_TILEFN
 +	cmp #M_FANZ
 	bcc +
 	jmp SNERR                   ; GO oder ein Befehl
@@ -725,6 +734,7 @@ _wert
 	jsr M_INT24
 	pla
 	jsr K_FUNKTION
+M_FERGEBNIS
 	lda LZ+2                    ; Ergebnis -> FAC
 	sta FACHO
 	lda LZ+1
@@ -1855,6 +1865,55 @@ M_INK
 	ldx #4
 	ldy #23
 	jmp M_ALLG
+
+; MERIDIAN 1.0, Werkstatt: MAP l[,x,y] zeigt Karte l (1 hinten, 2 vorn),
+; MAP 0 aus; TILE l,x,y,t[,f] setzt ein Feld, TILE(l,x,y) liest es (Kern 24,
+; 25, Funktion 9 - die Arbeit macht das Werkstatt-ROM)
+M_MAP
+	ldx #3
+	ldy #24
+	jmp M_ALLG
+M_TILE
+	ldx #5
+	ldy #25
+	jmp M_ALLG
+M_SFX                           ; SFX n[,v]: Klang n aus der Werkstatt
+	ldx #2
+	ldy #26
+	jmp M_ALLG
+M_LOOK                          ; LOOK [n]: Look der Werkstatt (LOOK 0: Start)
+	ldx #1
+	ldy #27
+	jmp M_ALLG
+M_TILEFN                        ; mitten in einem Ausdruck: die Werte eines
+	ldx #9                      ; Befehls drumherum (SPRITE ...,TILE(...))
+-	lda P_ANZ,x                 ; retten
+	pha
+	dex
+	bpl -
+	lda M_REG
+	pha
+	lda M_WELLE
+	pha
+	jsr CHRGET
+	jsr CHKOPN
+	lda #3
+	sta M_REG
+	jsr M_ARGS
+	jsr CHKCLS
+	lda #9
+	jsr K_FUNKTION
+	pla
+	sta M_WELLE
+	pla
+	sta M_REG
+	ldx #0
+-	pla
+	sta P_ANZ,x
+	inx
+	cpx #10
+	bne -
+	jmp M_FERGEBNIS
 
 ERW_ENDE
 

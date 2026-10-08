@@ -31,6 +31,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
 | Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card as drive 3 |
 | Network (DRAHT) | TCP, HTTP(S), file download and disk creation from BASIC, served by a small Python service on the MiSTer |
+| Workshop | built-in tools like on the Pico-8: sprite, tile, map, sound, palette and font editors, one key away from BASIC (F1–F6); a game and all its data are saved as one file |
 | Video | 15.7 kHz, NTSC 60 Hz or PAL 50 Hz |
 
 ## Getting started
@@ -70,6 +71,11 @@ with programs and variables in their own 64 KB bank. MERIDIAN adds:
   `SONG "name"` / `SONG STOP` / `SONG(n)` (plays a TAKTSTOCK tracker song in
   the background – eight tracks, effects, envelopes and synth panel – while
   BASIC keeps running; `SONG(0)` is the position, `SONG(1)` the row)
+- **Workshop data:** `MAP l[,x,y]` (show map 1 behind or map 2 in front,
+  scrolled by pixels) `TILE l,x,y,t[,f]` / `TILE(l,x,y)` (set / read a map
+  cell) `SFX n[,v]` (play a sound in the background, `SFX -1` stops)
+  `LOOK [0]` (use the workshop's palette, glow, ink and font; `LOOK 0` back
+  to the start look)
 - **Input:** `MOUSE`, `MOUSE(n)` `JOY(n)` `KEY(c)` `HIT(n)` `CLOCK(n)`
 - **Drives:** `DIR` `LOAD`/`SAVE "name"` `BLOAD` `BSAVE` `SCRATCH`
   `HEADER` `DRIVE` (drives 1 and 2 are the OSD disks, `DRIVE 3` is the
@@ -227,12 +233,51 @@ ROM is built from it, together with the song `taktstock/nebel.tak`. While a
 song plays it uses the voices, timer A, bank 0 `$B480–$B7FF` and expansion
 RAM from `$80:0000`; `KONZEPT.md` has the details.
 
+## The workshop
+
+Like on the Pico-8, a whole game can be made on the machine itself. While
+BASIC waits for a command, **F1–F6** open the workshop – F10 or Esc go back,
+and your program and screen are exactly as you left them. Everything is
+driven with the mouse and a few keys; the help lines on each tab list them.
+
+| Key | Tab | |
+|---|---|---|
+| F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline |
+| F2 | TILES | 256 tiles (8×8) in the same painter, previewed side by side to check that they tile. Tile 0 stays empty – empty maps are made of it |
+| F3 | MAP | two maps of 64×32 tiles. The upper part of the screen shows the maps as PINSEL draws them (the copper switches both layers to tile mode there), the lower part the tile picker |
+| F4 | SOUNDS | 64 short sounds: paint pitch and volume over 32 steps, eight waveforms, eight effects (slide, vibrato, drop, fades, arpeggios), speed and loop |
+| F5 | LOOK | your game's look: all 256 colours, which colours glow and how strongly, the ink colour and offset |
+| F6 | FONT | your own character set, in the sprite painter |
+
+`SAVE "GAME"` stores the program together with everything in the workshop
+that is not empty, `LOAD "GAME"` brings it all back – one file per game.
+Old files load as before. In the program, `SPRITE` uses the patterns,
+`MAP`/`TILE` the tiles and maps, `SFX` the sounds and `LOOK` the look and
+font:
+
+```basic
+10 LOOK:MAP 1,0,0
+20 FOR X=0 TO 192:MAP 1,X,0:PAUSE 1:NEXT
+30 IF TILE(1,5,10)=3 THEN SFX 0
+```
+
+Maps are only shown while a program runs; back at the prompt you see your
+text again. The workshop ROM lives at `$FF:C000`, its data in expansion RAM
+banks `$F8–$FC`; `KONZEPT.md` (section *Werkstatt*) has the memory map, the
+file format and the details.
+
+![The workshop: MAP](Screens/Workshop_MAP.png)
+
+![The workshop: SOUNDS](Screens/Workshop_SOUNDS.png)
+
+![The workshop: LOOK](Screens/Workshop_LOOK.png)
+
 ## Building
 
 - **Core:** Quartus Prime Lite 17.0.2, the usual MiSTer version. Open
   `Meridian.qpf`.
 - **ROMs** (kernel, BASIC, system ROM with DOS, music, network and monitor,
-  SONG ROM with the TAKTSTOCK player):
+  SONG ROM with the TAKTSTOCK player, workshop ROM):
   `rom/bauen.sh` needs [64tass](https://tass64.sourceforge.net/) and Python 3.
   The generated `rom/*.hex` files are included, so the core builds without
   them.

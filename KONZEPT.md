@@ -55,7 +55,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 |---|---|
 | `$00:0000–$00:00FF` | direkte Seite: `$00–$0F` BASIC-Brücken, `$10–$54` Kern, `$55–$FF` BASIC |
 | `$00:0100–$00:01FF` | Stapel |
-| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0`, SHINE `$02E1–$02F1` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
+| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0`, SHINE und Werkstatt (SAVE, LOAD, MAP) `$02E1–$02F3`, SFX-Abspieler `$02F4–$02FF` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
 | `$00:0400–$00:0D9F` | Bildschirmspeicher (40×30 Zellen à 2 Byte; 80 Zeichen bis `$00:16BF`) |
 | `$00:16C0–$00:16FF` | Parameterblock des DOS (siehe DOS) |
 | `$00:1700–$00:17FF` | direkte Seite des DOS (`$00–$69`), von MUSIK (`$80–$BF` je Stimme 16 Byte, `$F0–$FE`) und NETZ (`$C0–$C7`); Monitor: Ausgabezeile `$17C8–$17EF`, drei Bytes ab `$176A` |
@@ -76,14 +76,15 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$00:C801–$00:CFFF` | sonst: weitere Chips (liest `$FF`) |
 | `$00:D000–$00:FFFF` | Kern-ROM, Vektoren ab `$FFE4` |
 | `$01:0000–$01:FFFF` | RAM Bank 1; mit BASIC: Datenbank (Kopie des BASIC-Codes `$2000–$47FF`, Programm, Variablen und Zeichenketten `$4800–$FFFF`) |
-| `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), frei ab `$03:4000` (bis Etappe 14 SAMPLE-Puffer) |
-| `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab |
+| `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), Werkstatt: 256 Kacheln `$03:4000–$03:5FFF` und die Karten 1 und 2 `$03:6000–$03:7FFF` (MERIDIAN 1.0), frei ab `$03:8000` |
+| `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab; die Werkstatt nutzt `$F8–$FC` (siehe Werkstatt) |
 | `$FD:0000–$FD:FFFF` | DRAHT: 64 KB DDR3 (physisch `$3E100000`), nur für die CPU; Postfach zum Netzdienst (Etappe 12) |
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
 | `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
 | `$FF:0000–$FF:3FFF` | BASIC-ROM (16 KB) |
 | `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13) |
 | `$FF:8000–$FF:BFFF` | SONG-ROM (16 KB, MERIDIAN 1.0): der Abspieler von TAKTSTOCK für BASIC `SONG` – Befehl `$FF8000`, Takt `$FF8004`, Funktion `$FF8008` (`rom/song.asm`) |
+| `$FF:C000–$FF:FFFF` | Werkstatt-ROM (16 KB, MERIDIAN 1.0): die Werkzeuge am Gerät – Start `$FFC000`, SAVE `$FFC004`, LOAD `$FFC008`, BASIC `MAP`/`TILE` `$FFC00C` (`rom/werkstatt.asm`) |
 
 PINSEL liest das Chip-RAM über einen eigenen zweiten Port: Grafik und CPU
 kommen sich nie in die Quere (beim C64 musste die CPU warten, „Badlines“).
@@ -801,8 +802,8 @@ schaltet für die Dauer in den nativen Modus und zurück):
 | `$FFB2` | GRAFIK: A = 0 aus, sonst Bitmap 256 auf Ebene B (Bank 2) an und löschen |
 | `$FFB5` | PUNKT: x `$0380` (16 Bit), y `$0382`, Farbe `$0386` |
 | `$FFB8` | LINIE: von `$0380/$0382` nach `$0383/$0385`, Farbe `$0386` |
-| `$FFBE` | Funktion A (0 MOUSE, 1 JOY, 2 KEY, 3 HIT, 4 CLOCK, 5 NET, 6/7 NET$, 8 SONG), Wert und Ergebnis als 24-Bit-Zahl mit Vorzeichen in `$00–$02` (Etappe 11, `rom/eingabe.asm`) |
-| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–13: DOS, Schleifen und SONG, 19 SONG, 20 SONG STOP, 21 SHINE, 22 GLOW, 23 INK), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
+| `$FFBE` | Funktion A (0 MOUSE, 1 JOY, 2 KEY, 3 HIT, 4 CLOCK, 5 NET, 6/7 NET$, 8 SONG, 9 TILE – dessen drei Werte ab `$03A0` wie bei Befehlen), Wert und Ergebnis als 24-Bit-Zahl mit Vorzeichen in `$00–$02` (Etappe 11, `rom/eingabe.asm`) |
+| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–13: DOS, Schleifen und SONG, 19 SONG, 20 SONG STOP, 21 SHINE, 22 GLOW, 23 INK, 24 MAP, 25 TILE, 26 SFX, 27 LOOK), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
 
 **Lange Einsprünge** für Code im System-ROM (Etappe 13; Aufruf per `JSL`,
 zurück mit `RTL`; Akku 8, Index 16 Bit, direkte Seite und Datenbank 0):
@@ -974,6 +975,10 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `SHINE c,y,r,g,b` | Glanzpunkt: Farbe c hat in Zeile y die Farbe r,g,b (0–15); zwischen den Punkten einer Farbe ein Verlauf ohne Stufen, über dem ersten und unter dem letzten deren Farbe. `SHINE c`: Punkte der Farbe c weg, `SHINE`: alles aus. Höchstens 16 Glanzkanäle (je Farbe Punkte + 1, wenn der erste nicht in Zeile 0 liegt) |
 | `GLOW s[,c…]` | Leuchten mit Stärke s (1–15), die Farben c leuchten (bis zu 7 je Befehl, weitere mit dem nächsten GLOW); `GLOW 0` oder `GLOW`: aus, keine Farbe leuchtet mehr |
 | `INK c[,dx,dy[,b]]` | Tusche in Farbe c: Kontur um Sprites mit f + 256, Schlagschatten der Sprites mit f + 512 (b = 1: auch der Grafik/Ebene B), versetzt um dx (0–7) und dy (1–7, Vorgabe 2, 2); `INK 0` oder `INK`: aus |
+| `MAP l[,x,y]` | Ebene l zeigt Karte l aus der Werkstatt (1 hinten statt des Textes, 2 vorn statt der Grafik, Kachel-Farbe 0 durchsichtig), gerollt um x (0–511) und y (0–255) Punkte; `MAP 0`: aus. Wartet BASIC wieder auf einen Befehl, zeigen die Ebenen von selbst wieder Text und Grafik (MERIDIAN 1.0) |
+| `TILE l,x,y,t[,f]` | Feld x (0–63), y (0–31) der Karte l (1/2) bekommt Kachel t (0–255); f = Palettenbank + 16 spiegeln X + 32 Y, ohne f die Bank, in der die Kachel gemalt wurde |
+| `SFX n[,v]` | Klang n (0–63) aus der Werkstatt im Hintergrund auf Stimme v (1–4); ohne v auf der ersten freien von 4 abwärts (sonst 4). `SFX -1[,v]`: Stimme v bzw. alle still. Ein Klang nimmt seine Stimme, solange er spielt – PLAY und SONG auf derselben Stimme stören sich (MERIDIAN 1.0) |
+| `LOOK [n]` | Look aus der Werkstatt: ihre Palette, leuchtende Farben und Stärke, Tusche und ihr Zeichensatz gelten; `LOOK 0`: Startfarben, kein Leuchten, keine Tusche, Zeichensatz des ROM (MERIDIAN 1.0) |
 | `MOUSE 1[,n]` / `MOUSE 0` | Mauszeiger (Pfeil, Sprite n, Vorgabe 0 = ganz vorn) an / aus |
 | `NET "befehl"[,k]` | Auftrag an den Netzdienst, Kanal k (0–4), siehe unten |
 | `IF b THEN … ELSE …` | Etappe 13: ELSE gilt für das nächste IF davor in derselben Zeile; `IF A THEN 100 ELSE 200` springt |
@@ -993,6 +998,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `NET(k)` | k = 0: Status des letzten NET-Befehls (0 gut, HTTP-Code, negativ Fehler); sonst Zeilen, die auf Kanal k warten (0 keine, −1 keine Verbindung, −2 wartet auf einen Anruf) |
 | `NET$(k)` | nächste Zeile von Kanal k (leer, wenn keine); `NET$(0)`: Meldung zum letzten Befehl, danach seine weiteren Zeilen |
 | `SONG(n)` | 0 Position in der Folge, 1 Zeile (0–63), 2 spielt (1/0) – für Spiele und Demos, die sich nach der Musik richten |
+| `TILE(l,x,y)` | Kachel im Feld x,y der Karte l (0 = leer, auch außerhalb der Karte) – für Wände, Böden, Münzen |
 
 **NET** (Etappe 12) – die Arbeit macht der Netzdienst auf dem Linux-Teil des
 MiSTer; Fehler hält BASIC nie an, `NET(0)` und `NET$(0)` sagen, was war:
@@ -1109,6 +1115,107 @@ Wörter `FARBE MODUS GRAFIK PUNKT LINIE KLANG STILLE WARTE KOPIERE STEMPEL
 MUSTER VERLAUF KATALOG LADE SICHERE ENTFERNE LEERE LAUFWERK`. Die Token sind
 dieselben geblieben: gespeicherte Programme laufen weiter, `LIST` zeigt sie
 mit den neuen Namen.
+
+## Werkstatt – Werkzeuge am Gerät (MERIDIAN 1.0)
+
+Wie beim Pico-8 entsteht ein Spiel ganz am MERIDIAN: Programm, Sprites,
+Kacheln und Karten liegen in einer Datei. Die Werkzeuge stecken im ROM ab
+`$FF:C000` (`rom/werkstatt.asm` mit `ws_maler.asm`, `ws_karte.asm`,
+`ws_datei.asm`), die Oberfläche ist englisch.
+
+![Die Werkstatt: MAP](Screens/Workshop_MAP.png)
+
+**Aufruf:**
+- Während BASIC auf einen Befehl wartet, öffnen F1–F6 die Werkstatt mit
+  dem Reiter SPRITES, TILES, MAP, SOUNDS, LOOK oder FONT. Darin wechseln
+  F1–F6 den Reiter, F10 oder Esc führen zurück.
+- Der Kern fragt die F-Tasten roh aus der Tastentabelle ab
+  (`werkstatt_pruefen` in `zeile_lesen`). GETIN und laufende Programme sehen
+  davon nichts.
+- Die Werkstatt borgt sich den Bildschirm, die Bitmap `$02:0000`, Bank 0
+  `$A000–$AFFF` (dort ihre direkte Seite) und die Register von PINSEL,
+  KOBOLD und LOTSE. Beim Zurückgehen kommt alles wieder: Programm und
+  Bildschirm stehen da wie vorher.
+- Oberfläche: Ebene A Text 80 Zeichen, Ebene B Bitmap 256 (gezeichnet wird
+  nur in Zeilen unter 204, die Versätze bleiben 16 Bit), Mauszeiger.
+
+**Reiter:**
+
+| Reiter | Was |
+|---|---|
+| SPRITES | 128 Muster 16×16 malen: Stift, Füllen, Spiegeln, Drehen, Schieben, Kopieren, Einfügen, Zurück; Bank wählen; Vorschau einfach und doppelt mit Tusche; Bogen mit 4 Seiten. Jede Zeile geht sofort nach KOBOLD |
+| TILES | 256 Kacheln 8×8, derselbe Maler; Vorschau 8×6-mal nebeneinander (zeigt, ob die Kachel nahtlos passt). Kachel 0 bleibt leer – leere Karten bestehen aus ihr |
+| MAP | zwei Karten 64×32 aus den Kacheln. Oben zeigt PINSEL die Karten selbst (Zeilen 8–151, 40×18 Kacheln, Karte 2 vor Karte 1): LOTSE schaltet dort beide Ebenen auf Kacheln und ab Zeile 152 zurück; seine Befehlsliste liegt in Bitmap-Zeilen, die die Karte verdeckt. Unten die Kacheln zur Auswahl |
+| SOUNDS | 64 kurze Klänge wie beim Pico-8: 32 Schritte mit Note (C-0 bis B-6), Welle (Dreieck, Säge, Rechteck, Puls 25 % und 12 %, Rauschen, Dreieck+Säge, Säge+Puls), Lautstärke 0–15 (0 = Pause) und Effekt (Gleiten, Vibrato, Fallen, Ein- und Ausblenden, Arpeggio schnell und langsam: Note, +4, +7). Tempo in Bildern je Schritt, Schleife. Tonhöhe und Lautstärke malt man mit der Maus |
+| LOOK | der Look des Spiels: alle 256 Farben (R/G/B je 0–15 an Balken), welche leuchten und wie stark, die Tusche (Farbe, Versatz, Schatten von Ebene B). Das Gitter zeigt die Palette selbst, Lichthöfe und Tusche (am Vorschau-Sprite) wirken sofort. Beim Verlassen gelten wieder die Startfarben. BASIC `LOOK` holt den Look ins Programm |
+| FONT | der Zeichensatz: derselbe Maler für 256 Zeichen 8×8 mit 1 Bit, Vorschau als Probetext. BASIC `LOOK` holt ihn nach `$1800`; die Werkstatt selbst schreibt immer mit einer Kopie des ROM-Zeichensatzes (`$A800`), ein verunglückter Zeichensatz macht sie nie unlesbar |
+
+| Tasten | SPRITES und TILES | MAP |
+|---|---|---|
+| Maus | links malen/füllen, rechts Farbe aufnehmen, Klick auf Farbe oder Bogen wählt | links setzen, rechts Kachel aufnehmen, Klick in die Auswahl wählt |
+| Tasten | D zeichnen, F füllen, H/V spiegeln, R drehen, Pfeile schieben, C kopieren, P einfügen, X leeren, U zurück, 0–9 Farbe, +/− Bank, `,` `.` voriges/nächstes | 1/2 Karte, Pfeile rollen, H/V gespiegelt setzen, `,` `.` Kachel, X Karte leeren, U zurück |
+
+SOUNDS: Maus oben Tonhöhe, darunter Lautstärke (rechts: Pause bzw. 0), Klick
+in die Zeilen WAVE und EFFECT setzt die gewählte Welle bzw. den Effekt, links
+die Liste. Tasten: Leertaste hören/anhalten, 1–8 Welle, E Effekt, +/− Tempo,
+L Schleife, V Stimme zum Hören, hoch/runter transponieren, `,` `.` Klang,
+C P X U wie oben.
+
+LOOK: Maus Farbe im Gitter wählen, R/G/B an den Balken setzen. Tasten: G
+leuchten an/aus, +/− Stärke, I Tusche in dieser Farbe, O Tusche aus, Pfeile
+Versatz der Tusche, B Schatten von Ebene B, D Farbe wie beim Start, X alles
+wie beim Start, `,` `.` Farbe. FONT: wie SPRITES, Farbe nur 0 und 1.
+
+**Speicher:**
+
+| Wo | Was |
+|---|---|
+| `$03:4000–$03:5FFF` | 256 Kacheln zu 32 Byte (8 Zeilen zu 4 Byte, wie PINSEL sie liest) |
+| `$03:6000–$03:6FFF` / `$03:7000–$03:7FFF` | Karte 1 / Karte 2 (64×32 Einträge zu 2 Byte, siehe Kachelkarte) |
+| `$F8:0000–$F8:3FFF` | Cartridge: die 128 Spritemuster. KOBOLD ist nicht lesbar, deshalb schreibt auch `PATTERN` hierher mit |
+| `$F8:4000–$F8:407F` / `$F8:4200–$F8:42FF` | Bank je Muster / je Kachel |
+| `$F8:4100–$F8:417F` | Stand der Werkzeuge zwischen zwei Besuchen (Reiter, Muster, Farbe …) |
+| `$F8:4300–$F8:4352` | BASIC `MAP`: welche Karte zu sehen ist, die Ebenenregister davor |
+| `$F8:4400–$F8:443F` | SFX-Abspieler: je Stimme 16 Byte (Klang, Schritt, Bild, Frequenz, Lautstärke und ihre Schritte, Effekt) |
+| `$F8:4600–$F8:46FF` | FONT: Bank je Zeichen (nur für die Anzeige im Maler) |
+| `$F8:4800–$F8:4A3F` | Look: geändert (Bit 0 Look, Bit 1 Zeichensatz), Leuchtstärke, Tusche (Farbe, dx, dy, Ebene B), ab +16 Leuchtmaske (32 Byte), ab +64 Palette (256 × `gggg bbbb`, `---- rrrr`) |
+| `$F8:5000–$F8:6FFF` | MAP: die Karte vor der letzten Änderung (U), Tauschplatz |
+| `$F8:8000–$F8:A0FF` | 64 Klänge zu 132 Byte: Kopf (Tempo, 0 = 8; Schleife; 2 frei), 32 Schritte zu 4 Byte (Note, Welle, Lautstärke, Effekt) |
+| `$F8:C000–$F8:C7FF` | Zeichensatz der Cartridge (256 × 8 Byte, Bit 7 links) |
+| `$F9:0000–$FA:6FFF` | gerettet: Bitmap, Text (`$FA:4000`), Bank 0 (`$FA:5400`), Register (`$FA:6400`) |
+| `$FB:0000–$FC:FFFF` | Puffer für SAVE und LOAD |
+
+Der Kaltstart leert `$F8:0000–$F8:BFFF` und `$03:4000–$03:7FFF` und legt Startfarben und ROM-Zeichensatz als Vorgabe in die Cartridge; `LOAD` macht es genauso, bevor es die Abschnitte verteilt.
+
+**Datei:** `SAVE "name"` schreibt das Programm und dahinter, was in der
+Werkstatt nicht leer ist, als Abschnitte (Art 1 Byte, Länge 3 Byte, Daten):
+1 Sprites (Muster und Banken, `$4080` Byte), 2 Kacheln (Kacheln und Banken,
+`$2100`), 3 Karten (`$2000`), 4 Klänge (`$2100`), 5 Look (`$240`), 6 Zeichensatz
+(`$800`). Look und Zeichensatz kommen nur hinein, wenn sie geändert wurden. Am Ende stehen die Länge des Programms (3 Byte)
+und `MWS1`. Ist die Werkstatt leer, bleibt die Datei, wie sie immer war.
+`LOAD` erkennt `MWS1`, legt das Programm an seinen Platz, leert die
+Werkstatt und verteilt die Abschnitte; unbekannte überspringt es. Alte
+Dateien laden wie bisher. Die Datei darf bis 128 KB groß sein.
+
+**BASIC:** `MAP l[,x,y]`, `TILE l,x,y,t[,f]` und `TILE(l,x,y)` (siehe
+BASIC). Der Kern reicht sie als Befehle 24 und 25 und Funktion 9 an das
+Werkstatt-ROM weiter (`$FFC00C`, A = 0 MAP, 1 TILE, 2 TILE()). `MAP` merkt
+sich beim ersten Mal die Ebenenregister. `zeile_lesen` ruft im Direktmodus
+`$FFC00C` mit A = 3: Ist ein Programm zu Ende, zeigen die Ebenen wieder Text
+und Grafik wie vorher – so sieht man das Listing wieder.
+`anzeige_zuruecksetzen` vergisst die Karten. `TILE()` rettet die Werte
+eines Befehls drumherum, `SPRITE 1,X,Y,TILE(1,A,B)` geht also.
+
+**SFX-Abspieler:** `SFX` ist Befehl 26 (`$FFC00C`, A = 5). Der Interrupt
+des Kerns ruft jedes Bild nach PLAY `$FFC00C` mit A = 6, aber nur, solange
+`SFX_AN` (`$02F4`, Bit v = Stimme v) nicht 0 ist – sonst kostet SFX nichts.
+Der Abspieler benutzt nur `$02F4–$02FF` und lange Adressen. Wer diese Werte
+außerhalb des Interrupts anfasst (Editor, BASIC), sperrt ihn dafür kurz.
+Ein Schritt setzt die Welle bei gehaltenem Gate (Anschlag 0, Halten 15),
+laut und leise macht das Register LAUT; die Effekte rechnen je Bild auf
+Frequenz und Lautstärke (Gleiten und Fallen mit einer Teilung je Schritt).
+`anzeige_zuruecksetzen` setzt `SFX_AN` auf 0, beim Verlassen der Werkstatt
+verstummen alle Klänge.
 
 ## Werkzeuge
 

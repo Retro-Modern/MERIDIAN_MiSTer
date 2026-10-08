@@ -82,6 +82,15 @@ SONG_BEFEHL = $FF8000           ; ROM Bank $FF (MERIDIAN 1.0): A = 0 Song laden
 SONG_TAKT  = $FF8004            ;   und spielen, 1 anhalten; Takt bei Timer A;
 SONG_FUNKTION = $FF8008         ;   SONG(n)
 SONG_AN    = $02E0              ; 1: ein Song laeuft (SONG im ROM setzt ihn)
+WERKSTATT  = $FFC000            ; ROM Bank $FF (MERIDIAN 1.0): A = Reiter 0-5
+WS_SICHERN = $FFC004            ;   SAVE: Programm + Daten der Werkstatt
+WS_LADEN   = $FFC008            ;   LOAD: aus WS_PUFFER verteilen
+WS_PUFFER  = $FB0000            ;   Puffer fuer LOAD/SAVE (bis $FC:FFFF)
+WS_BASIC   = $FFC00C            ;   A = 0 MAP, 1 TILE, 2 TILE(), 3 Direktmodus, 4 Kaltstart
+KA_ZUSTAND = $F84300            ;   BASIC MAP: welche Karte gerade zu sehen ist
+SFX_AN     = $02F4              ;   SFX: Bit v = Stimme v spielt einen Klang ($02F5-$02FF Abspieler)
+KART_MUSTER = $F80000           ; Werkstatt: Kopie der 128 Spritemuster (KOBOLD
+                                ; ist nicht lesbar; PATTERN schreibt mit)
 ORG_FILTER = $C540
 ORG_KANAL  = $C580              ; Samplekanal k ab ORG_KANAL + k*$10
 ORG_ECHO   = $C550              ; Echo: Zeit (2), Rueckkopplung, Anteil, Bank
@@ -198,6 +207,8 @@ start
 	plb
 	stz SYS_STEUER              ; Spiegel aus
 	stz SONG_AN                 ; kein Song (der Timer ist nach dem Reset aus)
+	lda #4                      ; Werkstatt: Cartridge, Kacheln und Karten leeren
+	jsl WS_BASIC
 	lda #1                      ; Laufwerk 1, wenn keins angegeben ist
 	sta STD_LW
 	jsl MON_ANFANG              ; Register-Abzug des Monitors (Etappe 13)
@@ -472,6 +483,8 @@ anzeige_zuruecksetzen
 	bne -
 	lda #0                      ; keine Glanzpunkte (SHINE)
 	sta @l GL_TAB
+	sta @l KA_ZUSTAND           ; keine Karten (MAP), die Ebenen setzt es hier
+	stz SFX_AN                  ; keine Klaenge (SFX), still macht orgel_still
 	lda #1
 	sta PIN_A_TYP
 	lda spalten
@@ -1678,6 +1691,30 @@ _nein
 	lda #0
 	rts
 
+; F1-F6 gedrueckt? Dann die Werkstatt mit diesem Reiter (sie stellt beim
+; Verlassen Schirm, Chips und Speicher wieder her). Die Tasten kommen roh aus
+; der Tastentabelle - GETIN liefert keine F-Tasten, Programme sehen nichts.
+werkstatt_pruefen
+	.as
+	ldy #0
+-	#akku16
+	lda ws_tasten,y
+	and #$00ff
+	tax
+	#akku8
+	lda @l TASTEN_AN,x
+	bne +
+	iny
+	cpy #6
+	bne -
+	rts
++	jsr cursor_aus
+	tya                         ; Reiter 0-5
+	jsl WERKSTATT
+	rts
+ws_tasten
+	.byte $05, $06, $04, $0c, $03, $0b      ; F1-F6 (Scancodes)
+
 ; Eine Zeile mit dem Bildschirmeditor holen und nach BASICs Eingabepuffer
 ; legen (mit 0 abgeschlossen). Wie beim C64: In der Zeile, in der die
 ; Eingabe begann, zaehlt erst ab der Startspalte (die Eingabeaufforderung
@@ -1685,7 +1722,11 @@ _nein
 ; (Befehle), sonst bleibt alles, wie es getippt wurde (Antworten auf INPUT).
 zeile_lesen
 	sta ein_modus
-	lda #1
+	cmp #0                      ; BASIC wartet auf einen Befehl: ein Programm
+	bne +                       ; ist zu Ende, MAP zeigt wieder den Text
+	lda #3                      ; (MERIDIAN 1.0)
+	jsl WS_BASIC
++	lda #1
 	sta blink_frei
 	lda cur_x
 	sta ein_x
@@ -1693,7 +1734,10 @@ zeile_lesen
 	sta ein_y
 _warten
 	wai
-	lda BOT_STATUS              ; per Netz geladen (ohne Autostart)?
+	lda ein_modus               ; BASIC wartet auf einen Befehl: F1-F6 oeffnen
+	bne +                       ; die Werkstatt (MERIDIAN 1.0)
+	jsr werkstatt_pruefen
++	lda BOT_STATUS              ; per Netz geladen (ohne Autostart)?
 	and #$01
 	beq +
 	jsr lade_meldung
@@ -2026,7 +2070,11 @@ irq_kern
 	jsr wiederholung
 	jsr maus_zeiger
 	jsl MUSIK_TAKT              ; PLAY im Hintergrund
-	inc bilder
+	lda SFX_AN                  ; SFX aus der Werkstatt (MERIDIAN 1.0)
+	beq +
+	lda #6
+	jsl WS_BASIC
++	inc bilder
 	bne +
 	inc bilder+1
 	bne +
@@ -2196,6 +2244,12 @@ l_modus
 	rtl
 l_anzeige
 	jsr anzeige_zuruecksetzen
+	rtl
+l_befehl                        ; fuer die Werkstatt (MERIDIAN 1.0): Kern-Befehl A
+	jsr bb_befehl               ; mit Werten ab P_WERT, wie aus BASIC
+	rtl
+l_funktion                      ;   Kern-Funktion A, Wert/Ergebnis in $00-$02
+	jsr bb_funktion
 	rtl
 l_cursor_aus
 	jsr cursor_aus

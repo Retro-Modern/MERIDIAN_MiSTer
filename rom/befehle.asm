@@ -70,6 +70,30 @@ b_tabelle
 	.word net_befehl, dos_fehlertext               ; 17 NET, 18 Text zu DOS-Fehler
 	.word lied_befehl, lied_stopp                  ; 19 SONG, 20 SONG STOP (MERIDIAN 1.0)
 	.word glanz_befehl, leucht_befehl, tinte_befehl  ; 21 SHINE, 22 GLOW, 23 INK (PINSEL-Look)
+	.word karte_befehl, kachel_befehl              ; 24 MAP, 25 TILE (Werkstatt-ROM)
+	.word klang_befehl, look_befehl                ; 26 SFX, 27 LOOK (Werkstatt-ROM)
+
+; MAP l[,x,y] und TILE l,x,y,t[,f]: die Arbeit macht das Werkstatt-ROM
+karte_befehl
+	.as
+	lda #0
+	jsl WS_BASIC
+	rts
+kachel_befehl
+	.as
+	lda #1
+	jsl WS_BASIC
+	rts
+klang_befehl                    ; SFX n[,v]
+	.as
+	lda #5
+	jsl WS_BASIC
+	rts
+look_befehl                     ; LOOK [n]
+	.as
+	lda #7
+	jsl WS_BASIC
+	rts
 
 ; SONG "name"[,laufwerk]: TAKTSTOCK-Song laden und im Hintergrund spielen
 ; (ROM Bank $FF); A = 0 gut, 2-9 Fehler des DOS, 13 kein Song
@@ -1039,6 +1063,7 @@ muster
 	asl a                       ; z * 8
 	clc
 	adc zeiger
+	tax                         ; auch in die Musterkopie der Werkstatt
 	#akku8
 	sta KOB_MADR
 	xba
@@ -1064,6 +1089,8 @@ muster
 	bcs _f
 	ora tmp
 	sta KOB_MDATEN
+	sta @l KART_MUSTER,x
+	inx
 	iny
 	cpy #16
 	bne -
@@ -1597,23 +1624,16 @@ d_laufwerk
 _f
 	jmp b_fehler
 
-; SAVE "name"[,laufwerk]: P_START/P_LEN = BASIC-Programm, ohne Kopf
+; SAVE "name"[,laufwerk]: P_START/P_LEN = BASIC-Programm, ohne Kopf. Hat
+; die Werkstatt Daten (Sprites ...), haengt sie sie hinten an (MERIDIAN 1.0);
+; sie setzt D_ADR und D_LAENGE.
 d_save
 	.as
 	jsr dos_name
 	bne _f
 	ldx #e_bas
 	jsr endung
-	#akku16
-	lda P_START
-	sta D_ADR
-	lda P_LEN
-	sta D_LAENGE
-	#akku8
-	lda P_START+2
-	sta D_ADR+2
-	lda P_LEN+2
-	sta D_LAENGE+2
+	jsl WS_SICHERN
 	stz D_LAENGE+3
 	stz D_MER
 	ldx #0
@@ -1623,7 +1643,9 @@ d_save
 _f
 	jmp b_fehler
 
-; LOAD "name"[,laufwerk]: nach P_START, hoechstens P_LEN; zurueck P_LEN
+; LOAD "name"[,laufwerk]: nach P_START, hoechstens P_LEN; zurueck P_LEN.
+; Seit MERIDIAN 1.0 erst in den Puffer der Werkstatt ($FB:0000, bis 128 KB):
+; sie legt das Programm nach P_START und ihre Daten an ihre Plaetze.
 d_load
 	.as
 	jsr dos_name
@@ -1631,29 +1653,23 @@ d_load
 	ldx #e_bas
 	jsr endung
 	#akku16
-	lda P_START
+	lda #<>WS_PUFFER
 	sta D_ADR
-	lda P_LEN
-	sta D_LAENGE
+	stz D_LAENGE
 	#akku8
-	lda P_START+2
+	lda #`WS_PUFFER
 	sta D_ADR+2
-	lda P_LEN+2
+	lda #2                      ; 128 KB
 	sta D_LAENGE+2
 	stz D_LAENGE+3
 	ldx #0
 	jsr lw_wert
 	lda #0
 	jsl DOS
-	pha
-	#akku16
-	lda D_LAENGE
-	sta P_LEN
-	#akku8
-	lda D_LAENGE+2
-	sta P_LEN+2
-	pla
-	rts
+	cmp #0
+	bne +
+	jsl WS_LADEN                ; A = 0 gut, 8 zu gross; setzt P_LEN
++	rts
 _f
 	jmp b_fehler
 

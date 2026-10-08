@@ -31,7 +31,8 @@ module meridian_core
 	parameter ROM_FILE   = "rom/kern.hex",
 	parameter BASIC_FILE = "rom/basic.hex",
 	parameter DOS_FILE   = "rom/dos.hex",
-	parameter SONG_FILE  = "rom/song.hex"
+	parameter SONG_FILE  = "rom/song.hex",
+	parameter WERK_FILE  = "rom/werkstatt.hex"
 )
 (
 	input         clk,          // 24 MHz
@@ -372,6 +373,12 @@ reg [7:0] songrom [0:16383];
 reg [7:0] song_q;
 initial $readmemh(SONG_FILE, songrom);
 always @(posedge clk) song_q <= songrom[a[13:0]];
+
+// WERKSTATT-ROM: Bank $FF ab $C000 (MERIDIAN 1.0) - die Werkzeuge am Geraet
+reg [7:0] werkrom [0:16383];
+reg [7:0] werk_q;
+initial $readmemh(WERK_FILE, werkrom);
+always @(posedge clk) werk_q <= werkrom[a[13:0]];
 
 //////////////////////////////  PINSEL  /////////////////////////////////////
 
@@ -812,7 +819,7 @@ always @* begin
 	else if (is_lot) cpu_din = lot_dout;
 	else if (is_zus) cpu_din = cpu_treffer ? wp_byte_cpu : z_cpu_da ? z_cpu_q : z_q24;
 	else if (is_netz) cpu_din = netz_dout;
-	else if (is_brom) cpu_din = (a[15:14] == 2'b00) ? brom_q : (a[15:14] == 2'b01) ? dos_q : (a[15:14] == 2'b10) ? song_q : 8'hFF;
+	else if (is_brom) cpu_din = (a[15:14] == 2'b00) ? brom_q : (a[15:14] == 2'b01) ? dos_q : (a[15:14] == 2'b10) ? song_q : werk_q;
 	else if (is_truhe || is_tpuf) cpu_din = truhe_dout;
 	else if (is_sys && a[7:0] == 8'h00) cpu_din = {6'b0, s_status, sys_spiegel};
 	else             cpu_din = 8'hFF;
