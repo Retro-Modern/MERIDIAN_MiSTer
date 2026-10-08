@@ -19,3 +19,10 @@ assert len(d) <= 16384, "DOS-ROM zu gross"
 open("rom/dos.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
 print(f"rom/dos.hex: DOS {len(d)} Bytes, frei {16384 - len(d)}")
 PY
+( cd rom && 64tass --long-branch -b -q -o song.bin -L song.lst song.asm )
+python3 - <<'PY'
+d = open("rom/song.bin", "rb").read()
+assert len(d) <= 16384, "SONG-ROM zu gross"
+open("rom/song.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
+print(f"rom/song.hex: SONG {len(d)} Bytes, frei {16384 - len(d)}")
+PY

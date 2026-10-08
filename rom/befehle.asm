@@ -68,6 +68,31 @@ b_tabelle
 	.word d_save, d_load
 	.word maus_befehl, play_befehl, stille_befehl  ; 14 MOUSE, 15 PLAY, 16 SILENCE
 	.word net_befehl, dos_fehlertext               ; 17 NET, 18 Text zu DOS-Fehler
+	.word lied_befehl, lied_stopp                  ; 19 SONG, 20 SONG STOP (MERIDIAN 1.0)
+
+; SONG "name"[,laufwerk]: TAKTSTOCK-Song laden und im Hintergrund spielen
+; (ROM Bank $FF); A = 0 gut, 2-9 Fehler des DOS, 13 kein Song
+lied_befehl
+	.as
+	jsr dos_name
+	bne _f
+	ldx #e_tak
+	jsr endung
+	ldx #0
+	jsr lw_wert
+	stz klang_zeit              ; die Stimmen gehoeren jetzt dem Song: Kern-Klaenge
+	stz klang_maske             ; (Startklang) nicht mehr loslassen
+	lda #0
+	jsl SONG_BEFEHL
+	rts
+_f
+	jmp b_fehler
+
+lied_stopp
+	.as
+	lda #1
+	jsl SONG_BEFEHL
+	jmp b_gut
 
 play_befehl                     ; PLAY "noten"[,stimme] (Etappe 11, ROM Bank $FF)
 	.as
@@ -80,7 +105,7 @@ dos_fehlertext                  ; Text zum DOS-Fehler P_WERT (2-9) fuer BASIC, 1
 	lda P_WERT
 	sec
 	sbc #2
-	cmp #11
+	cmp #12
 	bcs +
 	asl a
 	#akku16
@@ -95,6 +120,7 @@ dos_fehlertext                  ; Text zum DOS-Fehler P_WERT (2-9) fuer BASIC, 1
 df_tabelle
 	.word df_2, df_3, df_4, df_5, df_6, df_7, df_8, df_9
 	.word df_10, df_11, df_12   ; Etappe 13: Schleifen
+	.word df_13                 ; MERIDIAN 1.0: SONG
 df_2	.text "FILE NOT FOUND", 0
 df_3	.text "DISK FULL", 0
 df_4	.text "NO DISK", 0
@@ -106,6 +132,7 @@ df_9	.text "BAD FILE NAME", 0
 df_10	.text "WEND WITHOUT WHILE", 0
 df_11	.text "WHILE WITHOUT WEND", 0
 df_12	.text "UNTIL WITHOUT REPEAT", 0
+df_13	.text "NOT A SONG", 0
 
 net_befehl                      ; NET "befehl"[,kanal] (Etappe 12, ROM Bank $FF)
 	.as
@@ -113,8 +140,10 @@ net_befehl                      ; NET "befehl"[,kanal] (Etappe 12, ROM Bank $FF)
 	jsl NETZ
 	rts
 
-stille_befehl                   ; SILENCE: Stimmen und Samplekanaele aus, PLAY halt
+stille_befehl                   ; SILENCE: Stimmen und Samplekanaele aus, PLAY und SONG halt
 	.as
+	lda #1
+	jsl SONG_BEFEHL
 	lda #1
 	jsl MUSIK
 	ldx #0
@@ -1269,5 +1298,6 @@ zehner32	.dword 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1
 
 e_mer	.text "MER"
 e_bas	.text "BAS"
+e_tak	.text "TAK"
 t_lw	.text "DRIVE ", 0
 t_frei	.text " BYTES FREE", 13, 0

@@ -73,8 +73,15 @@ NETZ       = $FF4009            ; ROM Bank $FF: NET (Etappe 12), A = Teilbefehl
 MON_BEFEHL = $FF400C            ; Monitor (Etappe 13): Zeile in EINGABE ausfuehren
 MON_HALT   = $FF400F            ;   nach BRK/Einzelschritt (Register auf dem Stapel)
 MON_ANFANG = $FF4012            ;   Abzug der Register beim Einschalten
+SONG_BEFEHL = $FF8000           ; ROM Bank $FF (MERIDIAN 1.0): A = 0 Song laden
+SONG_TAKT  = $FF8004            ;   und spielen, 1 anhalten; Takt bei Timer A;
+SONG_FUNKTION = $FF8008         ;   SONG(n)
+SONG_AN    = $02E0              ; 1: ein Song laeuft (SONG im ROM setzt ihn)
 ORG_FILTER = $C540
 ORG_KANAL  = $C580              ; Samplekanal k ab ORG_KANAL + k*$10
+ORG_ECHO   = $C550              ; Echo: Zeit (2), Rueckkopplung, Anteil, Bank
+ORG_FX     = $C5C0              ; Effekte der Samplekanaele 0-3 (4-7: +$700)
+ORG_KANAL2 = $CC80              ; Samplekanaele 4-7 (Etappe 17)
 
 ; KRAN (Blitter) und LOTSE (Copper)
 KRAN_REG   = $C600
@@ -184,6 +191,7 @@ start
 	pha
 	plb
 	stz SYS_STEUER              ; Spiegel aus
+	stz SONG_AN                 ; kein Song (der Timer ist nach dem Reset aus)
 	lda #1                      ; Laufwerk 1, wenn keins angegeben ist
 	sta STD_LW
 	jsl MON_ANFANG              ; Register-Abzug des Monitors (Etappe 13)
@@ -2078,6 +2086,18 @@ irq_kern
 	stz blink
 	jsr cursor_umschalten
 _haken
+	lda SONG_AN                 ; SONG: Timer A gibt den Takt - nur mit dem
+	beq _benutzer               ; Standard-Haken (ein eigener Haken, etwa der
+	lda irq_pfo                 ; von TAKTSTOCK, bekommt Timer A selbst)
+	and #$02
+	beq _benutzer
+	#akku16
+	lda BENUTZER_IRQ
+	cmp #irq_standard
+	#akku8
+	bne _benutzer
+	jsl SONG_TAKT
+_benutzer
 	lda irq_pin
 	ldx #0
 	jsr (BENUTZER_IRQ,x)
@@ -2138,6 +2158,23 @@ nmi
 	stz PFO_IRQEN
 	stz PFO_TASTEU
 	stz PFO_TBSTEU
+	lda SONG_AN                 ; lief ein Song: alles still, Echo und Effekte
+	beq +                       ; aus - ohne den Abspieler (das neue Programm
+	stz SONG_AN                 ; liegt vielleicht schon ueber seinen Feldern)
+	jsr orgel_still
+	stz ORG_FILTER+5            ; Filterausgang: kein Echo, nicht verzerrt
+	stz ORG_FILTER+6
+	stz ORG_ECHO+4              ; Echo aus (es schriebe weiter in Bank $EC)
+	ldx #$3f
+-	stz ORG_FX,x
+	stz ORG_FX+$700,x
+	dex
+	bpl -
+	stz ORG_KANAL2+$0b          ; Samplekanaele 4-7 anhalten
+	stz ORG_KANAL2+$1b
+	stz ORG_KANAL2+$2b
+	stz ORG_KANAL2+$3b
++
 	lda #$07
 	sta PFO_IRQST
 	jsr anzeige_zuruecksetzen

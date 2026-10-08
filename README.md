@@ -62,6 +62,9 @@ with programs and variables in their own 64 KB bank. MERIDIAN adds:
 - **Sound:** `SOUND` `SILENCE` `SAMPLE` (channels 0–7, also straight from
   expansion RAM, e.g. `SAMPLE 0,2097152,80000`) `PLAY` (a music macro language that
   plays in the background, like `PLAY "T150 O5 L8 CEGEC<G>CE !"`)
+  `SONG "name"` / `SONG STOP` / `SONG(n)` (plays a TAKTSTOCK tracker song in
+  the background – eight tracks, effects, envelopes and synth panel – while
+  BASIC keeps running; `SONG(0)` is the position, `SONG(1)` the row)
 - **Input:** `MOUSE`, `MOUSE(n)` `JOY(n)` `KEY(c)` `HIT(n)` `CLOCK(n)`
 - **Drives:** `DIR` `LOAD`/`SAVE "name"` `BLOAD` `BSAVE` `SCRATCH`
   `HEADER` `DRIVE` (drives 1 and 2 are the OSD disks, `DRIVE 3` is the
@@ -177,11 +180,33 @@ LOAD "ZUSAMMEN"
 RUN
 ```
 
+## Music with SONG
+
+`SONG` plays songs made with TAKTSTOCK, the tracker for MERIDIAN: eight
+tracks (the four synth voices and four sample channels), effects, a volume
+column, envelopes and a synth panel with filter envelope, accent and glide.
+The song runs in the background on timer A, so a game or demo keeps going
+and can follow the music with `SONG(0)` (position) and `SONG(1)` (row).
+The demo disk has a song to try:
+
+```basic
+SONG "NEBEL"
+WHILE SONG(0)<2:WEND:PRINT "PART 3"
+SONG STOP
+```
+
+TAKTSTOCK itself will be released later. Its player is already here
+(`taktstock/spieler.asm`, `taktstock/pult_rechnen.asm`), because the SONG
+ROM is built from it, together with the song `taktstock/nebel.tak`. While a
+song plays it uses the voices, timer A, bank 0 `$B480–$B7FF` and expansion
+RAM from `$80:0000`; `KONZEPT.md` has the details.
+
 ## Building
 
 - **Core:** Quartus Prime Lite 17.0.2, the usual MiSTer version. Open
   `Meridian.qpf`.
-- **ROMs** (kernel, BASIC, system ROM with DOS, music, network and monitor):
+- **ROMs** (kernel, BASIC, system ROM with DOS, music, network and monitor,
+  SONG ROM with the TAKTSTOCK player):
   `rom/bauen.sh` needs [64tass](https://tass64.sourceforge.net/) and Python 3.
   The generated `rom/*.hex` files are included, so the core builds without
   them.

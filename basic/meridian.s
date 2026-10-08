@@ -278,6 +278,7 @@ M_RESLST
 	.shift "REPEAT"
 	.shift "UNTIL"
 	.shift "RENUMBER"            ; Etappe 13b: Zeilen neu nummerieren
+	.shift "SONG"                ; MERIDIAN 1.0: TAKTSTOCK-Songs (Befehl und Funktion)
 	.byte 0
 M_RESENDE
 
@@ -292,7 +293,7 @@ M_STMDSP
 	.word SNERR-1, SNERR-1, SNERR-1, SNERR-1, SNERR-1   ; JOY KEY HIT CLOCK NET$
 	.word M_NET-1
 	.word REM-1, M_WHILE-1, M_WEND-1, M_REPEAT-1, M_UNTIL-1  ; ELSE: Rest der Zeile weg
-	.word M_RENUMBER-1
+	.word M_RENUMBER-1, M_SONG-1
 M_ANZAHL = (* - M_STMDSP) / 2
 M_ERSTE  = 24                   ; Token-Index von MOUSE, der ersten Funktion
 M_FANZ   = 7                    ; MOUSE JOY KEY HIT CLOCK NET$ NET
@@ -305,7 +306,9 @@ REPEATTK = ELSETK+3
 UNTILTK  = ELSETK+4
 IFTK     = GOTOTK+2             ; Microsofts Liste: GOTO RUN IF
 RUNTK    = GOTOTK+1
-	.cerror M_ANZAHL != 37, "ELSE ist nicht mehr Eintrag 31"
+STOPTK   = REMTK+1              ; Microsofts Liste: REM STOP
+SONGTK   = GOTK+1+37            ; MERIDIAN 1.0
+	.cerror M_ANZAHL != 38, "Liste geaendert: ELSE muss Eintrag 31 bleiben, SONG 37"
 
 	.cerror GOTK+M_ANZAHL > $ff, "zu viele Token"
 
@@ -699,14 +702,19 @@ M_PLAY                          ; PLAY "noten"[,stimme]
 M_FUNKTION
 	sec
 	sbc #GOTK+1+M_ERSTE
-	cmp #M_FANZ
+	cmp #SONGTK-GOTK-1-M_ERSTE  ; SONG(n): Kernfunktion 8
+	bne +
+	lda #8
+	bra _wert
++	cmp #M_FANZ
 	bcc +
 	jmp SNERR                   ; GO oder ein Befehl
 +	cmp #5                      ; NET$: Text
 	beq M_NETTEXT
-	bcc +
+	bcc _wert
 	lda #5                      ; NET(k): Kernfunktion 5
-+	pha
+_wert
+	pha
 	jsr CHRGET
 	jsr PARCHK                  ; ( Ausdruck )
 	jsr CHKNUM
@@ -728,6 +736,18 @@ M_FUNKTION
 	rol a                       ; Carry: positiv
 	lda #0
 	jmp FLOATB
+
+; MERIDIAN 1.0: SONG "name"[,laufwerk] spielt einen TAKTSTOCK-Song im
+; Hintergrund, SONG STOP haelt ihn an (Kern 19 und 20, Abspieler im ROM)
+M_SONG
+	cmp #STOPTK
+	bne +
+	jsr CHRGET
+	lda #20
+	jmp K_BEFEHL
++	ldx #1
+	ldy #19
+	jmp M_DATEI
 
 ; Etappe 12: NET "befehl"[,kanal] - der Netzdienst draht.py erledigt es
 M_NET

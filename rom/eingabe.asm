@@ -51,6 +51,20 @@ bb_funktion
 f_tabelle
 	.word f_maus, f_joy, f_taste, f_hit, f_uhr
 	.word f_netz, f_netzzeile, f_netztext   ; 5 NET(k), 6/7 NET$(k) (Etappe 12)
+	.word f_song                            ; 8 SONG(n) (MERIDIAN 1.0)
+
+f_song                          ; SONG(n): 0 Position, 1 Zeile, 2 spielt (ROM Bank $FF)
+	.as
+	lda F_WERT+1
+	ora F_WERT+2
+	bne +
+	lda F_WERT
+	jsl SONG_FUNKTION
+	sta F_WERT
+	stz F_WERT+1
+	stz F_WERT+2
+	rts
++	jmp f_falsch
 
 f_netz                          ; NET(k): Status / wartende Zeilen (ROM Bank $FF)
 	.as

@@ -11,7 +11,8 @@
 // geschweiften Klammern: {HOCH} {RUNTER} {LINKS} {RECHTS} {POS1} {ENTF}
 // {RUECK} {CLR} {EINFG} {ESC} {STRG1}..{STRG9}, {F1}..{F12} {TAB} {BILDHOCH}
 // {BILDRUNTER} {ENDE}, {WARTE} (eine halbe Sekunde); Vorsatz U: haelt
-// Umschalt, S: Strg (z. B. {U:HOCH}, {S:RECHTS}, {S:C}).
+// Umschalt, S: Strg, A: Alt (z. B. {U:HOCH}, {S:RECHTS}, {A:RUNTER});
+// Strg+Buchstabe als {STRGc} - {S:C} sendet nichts.
 //
 // MERIDIAN_MENUE=datei.mer laedt ab Bild MERIDIAN_MENUE_AB (Standard 60)
 // wie aus dem MiSTer-Menue (ioctl): ein Byte alle MERIDIAN_MENUE_ABSTAND
@@ -63,7 +64,7 @@
 #include <unistd.h>
 
 // Ein Tastendruck: Scancode, E0, Umschalt, Strg
-struct Taste { int code, e0, umsch, strg; };
+struct Taste { int code, e0, umsch, strg, alt; };
 
 static bool zeichen_taste(unsigned char c, Taste& t) {
     static const char* klein = "abcdefghijklmnopqrstuvwxyz";
@@ -120,9 +121,9 @@ static std::deque<Taste> tipp_folge(const char* text) {
         if (*p == '{') {
             const char* e = strchr(p, '}');
             std::string w(p + 1, e - p - 1);
-            int um = 0, st = 0;                 // Vorsaetze U: (Umschalt) und S: (Strg)
+            int um = 0, st = 0, al = 0;         // Vorsaetze U: (Umschalt), S: (Strg), A: (Alt)
             while (w.size() > 2 && w[1] == ':') {
-                if (w[0] == 'U') um = 1; else if (w[0] == 'S') st = 1;
+                if (w[0] == 'U') um = 1; else if (w[0] == 'S') st = 1; else if (w[0] == 'A') al = 1;
                 w = w.substr(2);
             }
             static const struct { const char* n; int code, e0; } fx[] = {
@@ -131,7 +132,7 @@ static std::deque<Taste> tipp_folge(const char* text) {
                 {"F11", 0x78, 0}, {"F12", 0x07, 0}, {"TAB", 0x0D, 0}, {"BILDHOCH", 0x7D, 1},
                 {"BILDRUNTER", 0x7A, 1}, {"ENDE", 0x69, 1}, {"RETURN", 0x5A, 0}, {"WARTE", -1, 0}};
             bool gefunden = false;
-            for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st}; gefunden = true; }
+            for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st, al}; gefunden = true; }
             if (gefunden) { f.push_back(t); p = e; continue; }
             t = {0, 1, 0, 0};
             if (w == "HOCH") t.code = 0x75; else if (w == "RUNTER") t.code = 0x72;
@@ -144,6 +145,7 @@ static std::deque<Taste> tipp_folge(const char* text) {
             else if (w.rfind("STRG", 0) == 0) { zeichen_taste(w[4], t); t.strg = 1; }
             if (um) t.umsch = 1;
             if (st) t.strg = 1;
+            if (al) t.alt = 1;
             f.push_back(t);
             p = e;
             continue;
@@ -217,6 +219,32 @@ struct Sdram {
 static const int W = 640, H = 240;
 static const uint64_t TAKT = 24000000ULL;
 
+// MERIDIAN_ABZUG="von-bis=datei,..." (hex, 24 Bit, Zusatzspeicher): diese Bytes
+// aus dem SDRAM-Modell in Dateien schreiben (zum Vergleichen). Mit Anhang
+// (MERIDIAN_ABZUG_BEI=Bild,...) zusaetzlich mitten im Lauf: datei.Bild
+template <class S>
+static void abzug_schreiben(S& sdram, const std::string& liste, const std::string& anhang) {
+    size_t a = 0;
+    while (a < liste.size()) {
+        size_t e = liste.find(',', a);
+        if (e == std::string::npos) e = liste.size();
+        std::string teil = liste.substr(a, e - a);
+        unsigned long von = 0, bis = 0;
+        size_t gl = teil.find('=');
+        if (gl != std::string::npos && sscanf(teil.c_str(), "%lx-%lx", &von, &bis) == 2 && bis >= von) {
+            std::string name = teil.substr(gl + 1) + anhang;
+            FILE* f = fopen(name.c_str(), "wb");
+            for (unsigned long x = von; f && x <= bis; x++) {
+                uint16_t w = sdram.mem[(x >> 1) & (sdram.mem.size() - 1)];
+                fputc((x & 1) ? (w >> 8) : (w & 0xFF), f);
+            }
+            if (f) fclose(f);
+            printf("Abzug %06lX-%06lX -> %s\n", von, bis, name.c_str());
+        }
+        a = e + 1;
+    }
+}
+
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     if (argc < 3) {
@@ -228,6 +256,16 @@ int main(int argc, char** argv) {
     int pal = argc > 3 ? atoi(argv[3]) : 0;
     std::set<int> bilder;
     for (int i = 4; i < argc; i++) bilder.insert(atoi(argv[i]));
+    std::set<int> abzug_bei;
+    if (getenv("MERIDIAN_ABZUG_BEI")) {
+        std::string l = getenv("MERIDIAN_ABZUG_BEI");
+        for (size_t a = 0; a < l.size();) {
+            size_t e = l.find(',', a);
+            if (e == std::string::npos) e = l.size();
+            abzug_bei.insert(atoi(l.substr(a, e - a).c_str()));
+            a = e + 1;
+        }
+    }
     long spur = getenv("MERIDIAN_SPUR") ? atol(getenv("MERIDIAN_SPUR")) : 0;
     long spur_ab = getenv("MERIDIAN_SPUR_AB") ? atol(getenv("MERIDIAN_SPUR_AB")) : 0;
     // MERIDIAN_SCHREIBSPUR=von-bis (hex, 24 Bit): Schreibzugriffe der CPU dort zeigen
@@ -380,8 +418,10 @@ int main(int argc, char** argv) {
                 if (k.code < 0) { z += TAKT / 2; continue; }   // {WARTE}: eine halbe Sekunde
                 if (k.umsch) { ereignisse.push_back({z, 0x12, 0, 1}); z += H / 2; }
                 if (k.strg)  { ereignisse.push_back({z, 0x14, 0, 1}); z += H / 2; }
+                if (k.alt)   { ereignisse.push_back({z, 0x11, 0, 1}); z += H / 2; }
                 ereignisse.push_back({z, k.code, k.e0, 1}); z += H;
                 ereignisse.push_back({z, k.code, k.e0, 0}); z += H / 2;
+                if (k.alt)   { ereignisse.push_back({z, 0x11, 0, 0}); z += H / 2; }
                 if (k.strg)  { ereignisse.push_back({z, 0x14, 0, 0}); z += H / 2; }
                 if (k.umsch) { ereignisse.push_back({z, 0x12, 0, 0}); z += H / 2; }
                 z += H;
@@ -592,6 +632,8 @@ int main(int argc, char** argv) {
                     film_bilder++;
                 }
                 if (frame == 2) printf("Bild 2: %d sichtbare Zeilen\n", y);
+                if (abzug_bei.count(frame) && getenv("MERIDIAN_ABZUG"))
+                    abzug_schreiben(sdram, getenv("MERIDIAN_ABZUG"), "." + std::to_string(frame));
                 frame++;
                 y = 0;
             }
@@ -635,27 +677,7 @@ int main(int argc, char** argv) {
     if (sd_auftraege) printf("Laufwerke: %ld Auftraege, %ld Bloecke\n", sd_auftraege, sd_bloecke);
     // MERIDIAN_ABZUG="von-bis=datei,..." (hex, 24 Bit, Zusatzspeicher): am Ende
     // diese Bytes aus dem SDRAM-Modell in Dateien schreiben (zum Vergleichen)
-    if (getenv("MERIDIAN_ABZUG")) {
-        std::string liste = getenv("MERIDIAN_ABZUG");
-        size_t a = 0;
-        while (a < liste.size()) {
-            size_t e = liste.find(',', a);
-            if (e == std::string::npos) e = liste.size();
-            std::string teil = liste.substr(a, e - a);
-            unsigned long von = 0, bis = 0;
-            size_t gl = teil.find('=');
-            if (gl != std::string::npos && sscanf(teil.c_str(), "%lx-%lx", &von, &bis) == 2 && bis >= von) {
-                FILE* f = fopen(teil.substr(gl + 1).c_str(), "wb");
-                for (unsigned long x = von; f && x <= bis; x++) {
-                    uint16_t w = sdram.mem[(x >> 1) & (sdram.mem.size() - 1)];
-                    fputc((x & 1) ? (w >> 8) : (w & 0xFF), f);
-                }
-                if (f) fclose(f);
-                printf("Abzug %06lX-%06lX -> %s\n", von, bis, teil.substr(gl + 1).c_str());
-            }
-            a = e + 1;
-        }
-    }
+    if (getenv("MERIDIAN_ABZUG")) abzug_schreiben(sdram, getenv("MERIDIAN_ABZUG"), "");
     top->final();
     delete top;
     return 0;

@@ -55,7 +55,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 |---|---|
 | `$00:0000–$00:00FF` | direkte Seite: `$00–$0F` BASIC-Brücken, `$10–$54` Kern, `$55–$FF` BASIC |
 | `$00:0100–$00:01FF` | Stapel |
-| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
+| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
 | `$00:0400–$00:0D9F` | Bildschirmspeicher (40×30 Zellen à 2 Byte; 80 Zeichen bis `$00:16BF`) |
 | `$00:16C0–$00:16FF` | Parameterblock des DOS (siehe DOS) |
 | `$00:1700–$00:17FF` | direkte Seite des DOS (`$00–$69`), von MUSIK (`$80–$BF` je Stimme 16 Byte, `$F0–$FE`) und NETZ (`$C0–$C7`); Monitor: Ausgabezeile `$17C8–$17EF`, drei Bytes ab `$176A` |
@@ -83,6 +83,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`), Notentexte für PLAY (`$FE:1000–$FE:13FF`) |
 | `$FF:0000–$FF:3FFF` | BASIC-ROM (16 KB) |
 | `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13) |
+| `$FF:8000–$FF:BFFF` | SONG-ROM (16 KB, MERIDIAN 1.0): der Abspieler von TAKTSTOCK für BASIC `SONG` – Befehl `$FF8000`, Takt `$FF8004`, Funktion `$FF8008` (`rom/song.asm`) |
 
 PINSEL liest das Chip-RAM über einen eigenen zweiten Port: Grafik und CPU
 kommen sich nie in die Quere (beim C64 musste die CPU warten, „Badlines“).
@@ -734,8 +735,8 @@ schaltet für die Dauer in den nativen Modus und zurück):
 | `$FFB2` | GRAFIK: A = 0 aus, sonst Bitmap 256 auf Ebene B (Bank 2) an und löschen |
 | `$FFB5` | PUNKT: x `$0380` (16 Bit), y `$0382`, Farbe `$0386` |
 | `$FFB8` | LINIE: von `$0380/$0382` nach `$0383/$0385`, Farbe `$0386` |
-| `$FFBE` | Funktion A (0 MOUSE, 1 JOY, 2 KEY, 3 HIT, 4 CLOCK, 5 NET, 6/7 NET$), Wert und Ergebnis als 24-Bit-Zahl mit Vorzeichen in `$00–$02` (Etappe 11, `rom/eingabe.asm`) |
-| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–12: DOS und Schleifen), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
+| `$FFBE` | Funktion A (0 MOUSE, 1 JOY, 2 KEY, 3 HIT, 4 CLOCK, 5 NET, 6/7 NET$, 8 SONG), Wert und Ergebnis als 24-Bit-Zahl mit Vorzeichen in `$00–$02` (Etappe 11, `rom/eingabe.asm`) |
+| `$FFBB` | Befehl A (0 BLIT, 1 STAMP, 2 SPRITE, 3 PATTERN, 4 SAMPLE, 5 GRADIENT, 6–13 Laufwerke, 14 MOUSE, 15 PLAY, 16 SILENCE, 17 NET, 18 Text zu einem Fehler 2–13: DOS, Schleifen und SONG, 19 SONG, 20 SONG STOP), Werte ab `$03A0` (je 3 Byte), Anzahl in `$039F`; zurück A = 0 gut (Etappe 9c, `rom/befehle.asm`) |
 
 **Lange Einsprünge** für Code im System-ROM (Etappe 13; Aufruf per `JSL`,
 zurück mit `RTL`; Akku 8, Index 16 Bit, direkte Seite und Datenbank 0):
@@ -903,6 +904,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `SAMPLE k[,adr,länge[,hz[,laut[,schleife]]]]` | Samplekanal k (0–7): 8 Bit mit Vorzeichen, Vorgabe 22 050 Hz und Lautstärke 63; spielt aus dem Chip-RAM oder direkt aus dem Zusatzspeicher, bis 16 MB lang (Etappe 15); nur k: anhalten |
 | `GRADIENT z1,r1,g1,b1,z2,r2,g2,b2` | Farbverlauf der Hintergrundfarbe von Zeile z1 bis z2 (Anteile 0–15), LOTSE setzt sie in jeder Zeile; mehrere Verläufe ergänzen sich; ohne Werte: aus |
 | `PLAY "noten"[,stimme]` | Musik im Hintergrund auf Stimme 1–4 (Vorgabe 1), siehe unten; leerer Text: Stimme still |
+| `SONG "name"[,lw]` / `SONG STOP` | TAKTSTOCK-Song (`NAME.TAK`) laden und im Hintergrund spielen / anhalten (MERIDIAN 1.0), siehe unten |
 | `MOUSE 1[,n]` / `MOUSE 0` | Mauszeiger (Pfeil, Sprite n, Vorgabe 0 = ganz vorn) an / aus |
 | `NET "befehl"[,k]` | Auftrag an den Netzdienst, Kanal k (0–4), siehe unten |
 | `IF b THEN … ELSE …` | Etappe 13: ELSE gilt für das nächste IF davor in derselben Zeile; `IF A THEN 100 ELSE 200` springt |
@@ -921,6 +923,7 @@ negativ). Maschinenprogramme für `USR` laufen mit Datenbank 1.
 | `CLOCK(n)` | 0 Bildzähler (1/60 s), 1 Sekunde, 2 Minute, 3 Stunde, 4 Tag, 5 Monat, 6 Jahr, 7 Wochentag (0 = Sonntag) |
 | `NET(k)` | k = 0: Status des letzten NET-Befehls (0 gut, HTTP-Code, negativ Fehler); sonst Zeilen, die auf Kanal k warten (0 keine, −1 keine Verbindung, −2 wartet auf einen Anruf) |
 | `NET$(k)` | nächste Zeile von Kanal k (leer, wenn keine); `NET$(0)`: Meldung zum letzten Befehl, danach seine weiteren Zeilen |
+| `SONG(n)` | 0 Position in der Folge, 1 Zeile (0–63), 2 spielt (1/0) – für Spiele und Demos, die sich nach der Musik richten |
 
 **NET** (Etappe 12) – die Arbeit macht der Netzdienst auf dem Linux-Teil des
 MiSTer; Fehler hält BASIC nie an, `NET(0)` und `NET$(0)` sagen, was war:
@@ -959,10 +962,37 @@ Dauerschleife. Der Kern ruft den Sequenzer in jedem Bild (`rom/musik.asm`);
 Zeiten zählen in 1/16 Bildern mit Übertrag, das Tempo bleibt genau.
 `SILENCE` hält auch PLAY an.
 
+**SONG** (MERIDIAN 1.0) spielt Songs aus TAKTSTOCK im Hintergrund, mit allem,
+was der Tracker kann: acht Spuren (vier Synthstimmen, vier Samplekanäle),
+Effekte, Lautstärke-Spalte, Hüllkurven und Synth-Pult. Der Abspieler ist
+derselbe wie in TAKTSTOCK und liegt im SONG-ROM; der Kern ruft ihn bei jedem
+Interrupt von Timer A (PFORTE) auf – BASIC läuft weiter. Ein Song läuft
+endlos (wie im Tracker, ab der Neustart-Position), bis `SONG STOP`,
+`SILENCE` oder ein neuer `SONG`; `F00` hält ihn an (`SONG(2)` = 0). Bilder,
+Texte und eigener Code der Bildspur bleiben liegen. Eine Datei, die keine
+TAKTSTOCK-Datei ist, meldet `?NOT A SONG ERROR`.
+
+Beispiel: `SONG "NEBEL":WHILE SONG(0)<2:WEND:PRINT "TEIL 3"`.
+
+TAKTSTOCK selbst, der Tracker für MERIDIAN, erscheint später. Sein Abspieler
+liegt schon im Projekt (`taktstock/spieler.asm`, `taktstock/pult_rechnen.asm`
+mit `huelle.inc` und `perioden.inc`), denn das SONG-ROM wird daraus gebaut;
+dazu der Song `taktstock/nebel.tak`, der auch auf der Vorführdiskette liegt.
+
+SONG belegt, solange er spielt: die vier Stimmen und alle Samplekanäle
+(PLAY und SOUND kommen ihm in die Quere), Timer A, Bank 0
+`$B480–$B7FF` (die letzten 896 Bytes des Bereichs für Maschinenprogramme),
+im Zusatzspeicher die Datei ab `$80:0000` (so lang wie sie ist, höchstens
+4 MB; der Abspieler spielt sie an Ort und Stelle) und das Echo in Bank
+`$EC`. Ein Maschinenprogramm, das einen eigenen Interrupt-Haken setzt,
+bekommt Timer A selbst – SONG steht dann still. Überschreibt es `$B480–$B7FF`,
+hört SONG von selbst auf.
+
 Fehler der Laufwerke meldet BASIC mit eigenen Texten: `?FILE NOT FOUND`,
 `?DISK FULL`, `?NO DISK`, `?BAD DISK`, `?WRITE PROTECTED`, `?DIRECTORY FULL`,
 `?FILE TOO BIG`, `?BAD FILE NAME` (jeweils mit „ERROR“), die Schleifen
-`?WEND WITHOUT WHILE`, `?WHILE WITHOUT WEND`, `?UNTIL WITHOUT REPEAT`.
+`?WEND WITHOUT WHILE`, `?WHILE WITHOUT WEND`, `?UNTIL WITHOUT REPEAT` und
+`?NOT A SONG` (SONG).
 
 **ELSE, WHILE und REPEAT** (Etappe 13): ELSE muss einen eigenen Befehl
 beginnen, sonst nähme `PRINT 1 ELSE` das ELSE für einen Teil seines
