@@ -165,6 +165,8 @@ ein_n      = $0F                ;   Zeichen noch zu lesen
 ein_a      = $08                ;   erste und
 ein_e      = $09                ;   letzte Bildschirmzeile der logischen Zeile
 ein_modus  = $0387              ;   0: Grossbuchstaben (Befehle), sonst wie getippt (INPUT)
+DOS_LAEUFT = $0388              ; MERIDIAN 1.0: das DOS arbeitet (setzt es selbst)
+START_WARTET = $0389            ;   ein Fernstart kam waehrenddessen und wartet
 
 TPUFFER    = $0200              ; 16 Tasten
 EINGABE    = $0210              ; 81 Byte
@@ -207,8 +209,8 @@ start
 	plb
 	stz SYS_STEUER              ; Spiegel aus
 	stz SONG_AN                 ; kein Song (der Timer ist nach dem Reset aus)
-	lda #4                      ; Werkstatt: Cartridge, Kacheln und Karten leeren
-	jsl WS_BASIC
+	stz DOS_LAEUFT              ; kein DOS-Aufruf, kein wartender Fernstart
+	stz START_WARTET
 	lda #1                      ; Laufwerk 1, wenn keins angegeben ist
 	sta STD_LW
 	jsl MON_ANFANG              ; Register-Abzug des Monitors (Etappe 13)
@@ -252,6 +254,8 @@ start
 	jsr modus_setzen
 
 	jsr ram_zaehlen
+	lda #4                      ; Werkstatt: Cartridge, Kacheln und Karten leeren
+	jsl WS_BASIC                ; (erst jetzt: ohne Zusatzspeicher nichts)
 
 	lda #TITEL
 	sta farbe
@@ -933,7 +937,10 @@ _ziffer
 +	jmp chrout
 
 ;============================================================================
-; RAM zaehlen: in jeder 64-KB-Bank $8000 beschreiben und zuruecklesen
+; RAM zaehlen: in jeder 64-KB-Bank $8000 und $8002 beschreiben und $8000
+; zuruecklesen. Zwei Stellen im Wechsel: Ohne SDRAM-Modul haelt der offene
+; Datenbus den zuletzt geschriebenen Wert noch eine Weile - wer dieselbe
+; Stelle gleich wieder liest, saehe Speicher, wo keiner ist (MERIDIAN 1.0).
 
 ram_zaehlen                     ; je Bank ein Byte pruefen, Inhalt bleibt
 	#akku16
@@ -952,18 +959,27 @@ _bank
 	and #$04
 	bne _da
 _pruefen
+	ldy #2
 	lda [zeiger]
 	sta tmp
+	lda [zeiger],y
+	sta tmp+1
 	lda #$5a
 	sta [zeiger]
+	lda #$a5
+	sta [zeiger],y
 	lda [zeiger]
 	cmp #$5a
 	bne _fertig
 	lda #$a5
 	sta [zeiger]
+	lda #$5a
+	sta [zeiger],y
 	lda [zeiger]
 	cmp #$a5
 	bne _fertig
+	lda tmp+1
+	sta [zeiger],y
 	lda tmp
 	sta [zeiger]
 _da
@@ -1696,6 +1712,8 @@ _nein
 ; der Tastentabelle - GETIN liefert keine F-Tasten, Programme sehen nichts.
 werkstatt_pruefen
 	.as
+	jsr zusatz_da               ; ihre Daten liegen im Zusatzspeicher
+	bcc _nein
 	ldy #0
 -	#akku16
 	lda ws_tasten,y
@@ -1711,6 +1729,15 @@ werkstatt_pruefen
 +	jsr cursor_aus
 	tya                         ; Reiter 0-5
 	jsl WERKSTATT
+_nein
+	rts
+
+zusatz_da                       ; C = 1: Zusatzspeicher bis Bank $FC (SDRAM-Modul steckt)
+	.as
+	#akku16
+	lda baenke
+	cmp #$fd
+	#akku8
 	rts
 ws_tasten
 	.byte $05, $06, $04, $0c, $03, $0b      ; F1-F6 (Scancodes)
@@ -2138,9 +2165,23 @@ irq_standard
 
 ;----------------------------------------------------------------------------
 ; NMI: Fernstart durch BOTE. Egal, was gerade lief: alles neu aufsetzen,
-; Programm per JSL starten, danach zurueck in den Monitor.
+; Programm per JSL starten, danach zurueck in den Monitor. Nur ein DOS-
+; Aufruf darf zu Ende laufen (MERIDIAN 1.0): Mitten im Schreiben abgebrochen,
+; bliebe die Diskette halb geaendert zurueck. Dann merkt sich der NMI den
+; Start, und das DOS springt an seinem Ende hierher (K_NMI).
 
 nmi
+	pha                         ; (Breite wie beim Unterbrochenen)
+	php
+	sep #$20
+	lda @l DOS_LAEUFT
+	beq +
+	sta @l START_WARTET
+	plp
+	pla
+	rti
++	plp
+	pla
 	sei
 	clc
 	xce
@@ -2304,6 +2345,7 @@ l_dostext
 	jmp bef_basic               ; $FFD9 (JML) zurueck ins BASIC
 	jmp haupt                   ; $FFDC (JML) Hauptschleife
 	jmp emu_rti                 ; $FFDF (JML) in den Emulationsmodus und RTI
+	.byte 1, 0                  ; $FFE2 Version des Systems: 1.0 (MERIDIAN 1.0)
 
 ;============================================================================
 ; Vektoren

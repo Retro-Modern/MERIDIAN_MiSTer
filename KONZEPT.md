@@ -4,7 +4,7 @@ Ein Heimcomputer, den es nie gab: irgendwo zwischen Commodore 64 und Amiga.
 Er entsteht als FPGA-Core für den MiSTer (DE10-Nano). Die CPU ist ein
 fertiger 65C816-Kern, alles drumherum ist Eigenbau.
 
-## Eckdaten (Ziel)
+## Eckdaten
 
 | | C64 | **MERIDIAN 816** | Amiga 500 |
 |---|---|---|---|
@@ -17,6 +17,44 @@ fertiger 65C816-Kern, alles drumherum ist Eigenbau.
 | Ton | SID, 3 Stimmen | **4 Synthesestimmen + 8 Samplekanäle, Stereo** | Paula, 4 Samples |
 | BASIC | Microsoft V2 | **Microsoft 1.1 + MERIDIAN-Befehle für Grafik und Klang** | AmigaBASIC |
 | Datenträger | Diskette 170 KB, Modul | **Disketten-/Platten-Images (FAT16), Module bis 4 MB** | Diskette 880 KB |
+| Werkzeuge | – | **eingebaut wie beim Pico-8: Sprites, Kacheln, Karten, Klänge, Look, Zeichensatz (F1–F6)** | – |
+
+## MERIDIAN 1.0 – was festgeschrieben ist
+
+Seit MERIDIAN 1.0 dürfen sich Programme auf die folgenden Dinge verlassen.
+Spätere Fassungen fügen hinzu, verschieben aber nichts.
+
+- **Version:** `$00:FFE2` Hauptnummer, `$00:FFE3` Nebennummer (1, 0).
+  Ältere Kerne haben dort andere Bytes; wer prüfen will, vergleicht beide.
+- **Speicherkarte** wie im nächsten Abschnitt, mit allem, was dort dem
+  System gehört:
+  - Kernseiten `$00:0000–$03FF`, Bildschirm, Zeichensatz `$00:1800`;
+  - BASIC `$00:2000–$47FF` und `$00:B800–$BFFF` mit Bank 1;
+  - Chips `$00:C000–$CFFF`, die ROMs;
+  - Kern im Chip-RAM `$03:2C00–$03:3FFF`, Werkstatt `$03:4000–$03:7FFF`;
+  - im Zusatzspeicher: Ablage `$10`, Werkstatt `$F8–$FC`, DRAHT `$FD`,
+    Systembank `$FE`;
+  - Module `$40–$7F`.
+- **Register** aller Chips wie hier beschrieben. Was frei ist, bleibt für
+  später reserviert und liest wie bisher.
+- **Einsprünge:**
+  - Kern `$00:FF80–$FF98` (JSR) und `$00:FFC1–$FFDF` (lang);
+  - BASIC-Brücken ab `$00:FFA0`;
+  - System-ROM `$FF:4000–$4018`;
+  - SONG `$FF:8000–$8008`;
+  - Werkstatt `$FF:C000–$C00C`.
+- **BASIC:** Die Token-Nummern bleiben; neue Wörter kommen hinten dazu.
+  Programme auf Diskette laufen deshalb auch auf späteren Fassungen.
+- **Dateiformate:** MER (16-Byte-Kopf), BAS (mit Werkstatt-Anhang `MWS1`),
+  TAK (TAKTSTOCK), Images als FAT16.
+- **Startzustand:** Jedes Programm, das per Fernstart oder nach einem
+  Maschinenprogramm kommt, findet die Anzeige wie nach dem Einschalten vor
+  (`anzeige_zuruecksetzen`):
+  - Startpalette, Text 40 oder 80 Zeichen, Ebene B aus;
+  - PINSEL-Look aus, LOTSE und KRAN angehalten, Sprites aus;
+  - keine Karten, keine Klänge.
+
+  Ein Fernstart wartet, bis ein laufender DOS-Aufruf fertig ist.
 
 ## Die Chips
 
@@ -55,7 +93,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 |---|---|
 | `$00:0000–$00:00FF` | direkte Seite: `$00–$0F` BASIC-Brücken, `$10–$54` Kern, `$55–$FF` BASIC |
 | `$00:0100–$00:01FF` | Stapel |
-| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0`, SHINE und Werkstatt (SAVE, LOAD, MAP) `$02E1–$02F3`, SFX-Abspieler `$02F4–$02FF` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380` |
+| `$00:0200–$00:03FF` | Kern: Tastenpuffer `$0200`, Eingabezeile `$0210`, Kopierstummel `$0270`, logische Zeilen `$0290`, Monitor `$02B0–$02DF` (Variablen, Register-Abzug `$02C0`), SONG läuft `$02E0`, SHINE und Werkstatt (SAVE, LOAD, MAP) `$02E1–$02F3`, SFX-Abspieler `$02F4–$02FF` (MERIDIAN 1.0), Interrupt-Haken `$0300`; BASIC: Eingabepuffer `$0310`, Grafikwerte `$0380`; Kern: DOS arbeitet `$0388`, Fernstart wartet `$0389` (MERIDIAN 1.0) |
 | `$00:0400–$00:0D9F` | Bildschirmspeicher (40×30 Zellen à 2 Byte; 80 Zeichen bis `$00:16BF`) |
 | `$00:16C0–$00:16FF` | Parameterblock des DOS (siehe DOS) |
 | `$00:1700–$00:17FF` | direkte Seite des DOS (`$00–$69`), von MUSIK (`$80–$BF` je Stimme 16 Byte, `$F0–$FE`) und NETZ (`$C0–$C7`); Monitor: Ausgabezeile `$17C8–$17EF`, drei Bytes ab `$176A` |
@@ -74,13 +112,13 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$00:CA00–$00:CBFF` | TRUHE: Puffer (ein Block, 512 Byte) |
 | `$00:CC00–$00:CCFF` | ORGEL, Seite 2: Samplekanäle 4–7 (Etappe 17) |
 | `$00:C801–$00:CFFF` | sonst: weitere Chips (liest `$FF`) |
-| `$00:D000–$00:FFFF` | Kern-ROM, Vektoren ab `$FFE4` |
+| `$00:D000–$00:FFFF` | Kern-ROM, Version `$FFE2/$FFE3`, Vektoren ab `$FFE4` |
 | `$01:0000–$01:FFFF` | RAM Bank 1; mit BASIC: Datenbank (Kopie des BASIC-Codes `$2000–$47FF`, Programm, Variablen und Zeichenketten `$4800–$FFFF`) |
 | `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), Werkstatt: 256 Kacheln `$03:4000–$03:5FFF` und die Karten 1 und 2 `$03:6000–$03:7FFF` (MERIDIAN 1.0), frei ab `$03:8000` |
 | `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab; die Werkstatt nutzt `$F8–$FC` (siehe Werkstatt) |
 | `$FD:0000–$FD:FFFF` | DRAHT: 64 KB DDR3 (physisch `$3E100000`), nur für die CPU; Postfach zum Netzdienst (Etappe 12) |
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
-| `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
+| `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`; ohne SDRAM-Modul `$03:FE00`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
 | `$FF:0000–$FF:3FFF` | BASIC-ROM (16 KB) |
 | `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13) |
 | `$FF:8000–$FF:BFFF` | SONG-ROM (16 KB, MERIDIAN 1.0): der Abspieler von TAKTSTOCK für BASIC `SONG` – Befehl `$FF8000`, Takt `$FF8004`, Funktion `$FF8008` (`rom/song.asm`) |
@@ -476,7 +514,11 @@ sich am Mac mit `tools/disk.py` anlegen und füllen und mit macOS einhängen
 
 Aufruf: Parameter in den Block ab `$00:16C0`, Befehl in A, `JSL $FF4000`;
 zurück A = Fehler (0 gut). Das DOS arbeitet mit eigener direkter Seite
-(`$1700`) und hält einen FAT-Sektor im Zusatzspeicher (`$FE:0000`).
+(`$1700`) und hält während eines Aufrufs einen FAT-Sektor im Zusatzspeicher
+(`$FE:0000`, ohne SDRAM-Modul im Chip-RAM bei `$03:FE00`). Seit MERIDIAN 1.0
+liest jeder Aufruf ihn frisch – ein geänderter Sektor geht vorher auf die
+Diskette. So sieht das DOS ein Image, das inzwischen jemand anders geändert
+hat, und der Puffer gehört ihm nur während eines Aufrufs.
 Einzelne Sektoren (Bootsektor, FAT, Verzeichnis) laufen über Seite 15 des
 TRUHE-Puffers. Die Seiten 0–14 sammeln Daten: Beim Laden liest das DOS 15
 Sektoren auf Vorrat, beim Sichern schreibt es bis zu 15 anschließende
@@ -719,6 +761,21 @@ passt nicht in 24 Adressbits.
 Gemessen (SPEICHERTEST, 16 KB in 16-Bit-Wörtern): Schreiben gleich schnell
 wie im Chip-RAM (19,5 ms), Lesen 6 % langsamer (18,5 statt 17,4 ms; ohne
 Wortpuffer 12 %). Alle 251 Bänke ohne einen Fehler.
+
+**Ohne SDRAM-Modul** (MERIDIAN 1.0): Der Kern zählt beim Start die Bänke,
+indem er in jeder `$8000` und `$8002` im Wechsel beschreibt und `$8000`
+zurückliest. Zwei Stellen, weil ein offener Datenbus den zuletzt
+geschriebenen Wert noch eine Weile hält – wer dieselbe Stelle gleich wieder
+liest, sähe Speicher, wo keiner ist. Ohne Modul meldet der Start
+*256 KB RAM*, und es gilt:
+- BASIC, Grafik, Sprites, Ton und Laufwerke laufen; das DOS legt seinen
+  FAT-Sektor dann bei `$03:FE00` ab.
+- `LOAD` lädt direkt ins Programm, `SAVE` speichert nur das Programm.
+- Die Werkstatt öffnet sich nicht (F1–F6 tun nichts). `MAP`, `TILE`, `SFX`,
+  `LOOK` und `SAVE`/`LOAD` ohne Namen melden `?NO EXPANSION RAM ERROR`
+  (DOS-Fehler 14 des Kerns).
+- Was ein Programm selbst in den Zusatzspeicher legt (`BLOAD`, `SAMPLE`,
+  `SONG`, Echo), fehlt natürlich.
 
 ## Palette MERIDIAN-16 (Startwerte des Kern-ROM)
 
@@ -1256,6 +1313,7 @@ verstummen alle Klänge.
 | Vorführdiskette, leere Disketten (BLANK1/2) und COUNTER.MOD anlegen | `tools/disketten.sh [ziel] [--mister]` (Standard `medien/disketten`) |
 | Modul bauen und prüfen | `programme/modul.sh counter` → `programme/counter.mod` (`tools/modul.py` prüft den Kopf) |
 | Laufwerke in der Simulation | `MERIDIAN_DISK1=bild.dsk [MERIDIAN_DISK0=speicher.sav] ./obj_dir/meridian_sim …` (geschriebene Blöcke landen am Ende in der Datei) |
+| Ohne SDRAM-Modul simulieren | `MERIDIAN_OHNE_SDRAM=1 ./obj_dir/meridian_sim …` (der offene Datenbus hält den zuletzt geschriebenen Wert, gespeichert wird nichts) |
 | Modul in der Simulation | `MERIDIAN_MENUE=../programme/counter.mod MERIDIAN_MENUE_INDEX=2 [MERIDIAN_MODUL_AUS=1] [MERIDIAN_MODUL_RAUS=bild] ./obj_dir/meridian_sim …` |
 | In der Simulation tippen | `MERIDIAN_TIPPEN='m d000\n' ./obj_dir/meridian_sim 3 out 0 170` |
 

@@ -84,7 +84,7 @@ wire  [31:0] joystick_0, joystick_1;
 wire         ioctl_download, ioctl_wr;
 wire  [15:0] ioctl_index;
 wire  [26:0] ioctl_addr;
-wire   [7:0] ioctl_dout;
+wire  [15:0] ioctl_dout;            // WIDE: 16 Bit je Schreibzugriff
 wire         ioctl_wait;
 
 // Laufwerke (TRUHE): Index 0 Speicherstand eines Moduls (legt der MiSTer
@@ -95,12 +95,12 @@ wire [63:0] img_size;
 wire [31:0] sd_lba;
 wire  [5:0] sd_blk_cnt;
 wire  [2:0] sd_rd, sd_wr, sd_ack;
-wire [13:0] sd_buff_addr;
-wire  [7:0] sd_buff_dout, sd_buff_din;
+wire [12:0] sd_buff_addr;           // WIDE: Wortadresse
+wire [15:0] sd_buff_dout, sd_buff_din;
 wire        sd_buff_wr;
 wire [31:0] sd_lba_n [3];
 wire  [5:0] sd_blk_cnt_n [3];
-wire  [7:0] sd_buff_din_n [3];
+wire [15:0] sd_buff_din_n [3];
 genvar lw;
 generate
 	for (lw = 0; lw < 3; lw = lw + 1) begin : laufwerke
@@ -110,7 +110,7 @@ generate
 	end
 endgenerate
 
-hps_io #(.CONF_STR(CONF_STR), .VDNUM(3)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .VDNUM(3), .WIDE(1)) hps_io   // WIDE: doppelter Durchsatz (MERIDIAN 1.0)
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),

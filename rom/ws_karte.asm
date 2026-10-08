@@ -509,8 +509,28 @@ ws_basic
 	and #$00ff
 	asl a
 	tax
+	lda K_BAENKE                ; ohne Zusatzspeicher (kein SDRAM-Modul)
+	cmp #$fd
 	#akku8
+	bcc wb_ohne
 	jmp (wb_tabelle,x)
+wb_ohne                         ; Befehle melden es, der Rest tut nichts
+	cpx #2 * 2
+	bne +
+	stz F_WERT                  ; TILE(): 0
+	stz F_WERT+1
+	stz F_WERT+2
+	rtl
++	cpx #3 * 2                  ; Direktmodus, Kaltstart, SFX-Takt
+	beq +
+	cpx #4 * 2
+	beq +
+	cpx #6 * 2
+	beq +
+	lda #14                     ; NO EXPANSION RAM
+	rtl
++	lda #0
+	rtl
 wb_tabelle
 	.word <>wb_map, <>wb_tile, <>wb_tile_wert, <>wb_direkt, <>wb_kalt
 	.word <>wb_sfx, <>ws_sfx_takt, <>wb_look

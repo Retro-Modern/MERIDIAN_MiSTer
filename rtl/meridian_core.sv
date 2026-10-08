@@ -52,7 +52,7 @@ module meridian_core
 	input   [7:0] ioctl_index,      // 1 Programm (*.MER), 2 Modul (*.MOD)
 	input         ioctl_wr,
 	input  [26:0] ioctl_addr,
-	input   [7:0] ioctl_dout,
+	input  [15:0] ioctl_dout,       // hps_io WIDE: 16 Bit (MERIDIAN 1.0)
 	output        ioctl_wait,       // BOTE wartet auf den Zusatzspeicher
 	input         modul_aus,        // Menue: Modul beim Start nicht starten
 	input         modul_raus,       // Menue: Modul auswerfen
@@ -65,9 +65,9 @@ module meridian_core
 	output  [2:0] sd_rd,
 	output  [2:0] sd_wr,
 	input   [2:0] sd_ack,
-	input  [13:0] sd_buff_addr,
-	input   [7:0] sd_buff_dout,
-	output  [7:0] sd_buff_din,
+	input  [12:0] sd_buff_addr,     // Wortadresse (hps_io WIDE)
+	input  [15:0] sd_buff_dout,
+	output [15:0] sd_buff_din,
 	input         sd_buff_wr,
 
 	output [28:0] ddr_addr,         // DDR3: Postfach (BOTE) und Fenster (DRAHT)

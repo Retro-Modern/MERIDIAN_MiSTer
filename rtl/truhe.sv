@@ -29,6 +29,10 @@
 //   $0C SEITE   Seite des Puffers (0-15): bei $CA00 sichtbar, erste des
 //               naechsten Auftrags
 //   $0D ANZAHL  Bloecke je Auftrag (1-16)
+//
+//  Seit MERIDIAN 1.0 laeuft hps_io mit 16 Bit Breite (WIDE): Das Rahmenwerk
+//  schreibt und liest den Puffer wortweise (kleines Byte zuerst), die CPU
+//  weiter byteweise - doppelter Durchsatz zwischen ARM und FPGA.
 //============================================================================
 
 module truhe
@@ -53,9 +57,9 @@ module truhe
 	output reg  [2:0] sd_rd,
 	output reg  [2:0] sd_wr,
 	input       [2:0] sd_ack,
-	input      [13:0] sd_buff_addr,
-	input       [7:0] sd_buff_dout,
-	output      [7:0] sd_buff_din,
+	input      [12:0] sd_buff_addr,     // Wortadresse (hps_io WIDE)
+	input      [15:0] sd_buff_dout,
+	output     [15:0] sd_buff_din,
 	input             sd_buff_wr
 );
 
@@ -72,24 +76,38 @@ reg        arbeitet, fehler, ack_war;
 assign sd_lba     = block;
 assign sd_blk_cnt = {2'b00, anzahl_m1};
 
-// Puffer, 8 KB mit einem einzigen Port: Solange ein Auftrag laeuft, gehoert
-// er dem Rahmenwerk, sonst der CPU (die waehrenddessen nur STATUS liest).
-// Zwei Schreibports legte Quartus nicht in M10K-Bloecke, sondern baute den
-// Puffer aus Logik. Beim Schreiben liefert der Port die neuen Daten.
-reg  [7:0] puffer [0:8191];
-reg  [7:0] puf_q;
-wire [12:0] p_adr = arbeitet ? {basis + sd_buff_addr[12:9], sd_buff_addr[8:0]} : {seite, adr};
-wire        p_we  = arbeitet ? (sd_buff_wr && (|sd_ack)) : (we && sel_puf);
-wire  [7:0] p_din = arbeitet ? sd_buff_dout : din;
+// Puffer, 8 KB als zwei Haelften (gerade und ungerade Bytes) mit je einem
+// Port: Solange ein Auftrag laeuft, gehoeren sie dem Rahmenwerk (ein Wort
+// je Zugriff), sonst der CPU (ein Byte; waehrenddessen liest sie nur
+// STATUS). Zwei Schreibports legte Quartus nicht in M10K-Bloecke, sondern
+// baute den Puffer aus Logik. Beim Schreiben liefert der Port die neuen
+// Daten.
+reg  [7:0] puf_g [0:4095];
+reg  [7:0] puf_u [0:4095];
+reg  [7:0] q_g, q_u;
+reg        q_ungerade;              // die CPU las ein ungerades Byte
+wire [11:0] p_adr  = arbeitet ? {basis + sd_buff_addr[11:8], sd_buff_addr[7:0]} : {seite, adr[8:1]};
+wire        p_hps  = sd_buff_wr && (|sd_ack);
+wire        p_we_g = arbeitet ? p_hps : (we && sel_puf && !adr[0]);
+wire        p_we_u = arbeitet ? p_hps : (we && sel_puf &&  adr[0]);
+wire  [7:0] din_g  = arbeitet ? sd_buff_dout[7:0]  : din;
+wire  [7:0] din_u  = arbeitet ? sd_buff_dout[15:8] : din;
 
 always @(posedge clk) begin
-	if (p_we) begin
-		puffer[p_adr] <= p_din;
-		puf_q         <= p_din;
+	if (p_we_g) begin
+		puf_g[p_adr] <= din_g;
+		q_g          <= din_g;
 	end
-	else puf_q <= puffer[p_adr];
+	else q_g <= puf_g[p_adr];
+	if (p_we_u) begin
+		puf_u[p_adr] <= din_u;
+		q_u          <= din_u;
+	end
+	else q_u <= puf_u[p_adr];
+	q_ungerade <= adr[0];
 end
-assign sd_buff_din = puf_q;
+assign sd_buff_din = {q_u, q_g};
+wire [7:0] puf_q = q_ungerade ? q_u : q_g;
 
 wire [2:0] lw_bit = 3'b001 << laufwerk;
 

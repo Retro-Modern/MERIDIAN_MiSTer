@@ -52,6 +52,7 @@ M_REG     = $05                 ; Zeropage unter dem Kern
 M_WELLE   = $06
 M_ROH     = $07                 ; LIST: in Anfuehrungszeichen (Bit 0) oder nach REM (Bit 7)
 FARBE_K   = $12                 ; Textfarbe des Kerns (Hintergrund * 16 + Vorder)
+BAENKE_K  = $20                 ; Baenke mit Speicher (Kern; ohne SDRAM-Modul 4)
 BILDER_K  = $50                 ; Bildzaehler des Kerns
 ORG       = $C500               ; Klangchip ORGEL
 PAL_IDX   = $C008               ; PINSEL: Palettenindex, Farbe gggg bbbb / ---- rrrr
@@ -194,7 +195,12 @@ _fehlt
 	jmp FCERR
 
 M_ABLAGE                        ; LZ = ABLAGE:0000
-	lda #0
+	lda BAENKE_K                ; MERIDIAN 1.0: ohne SDRAM-Modul gibt es
+	cmp #ABLAGE_BANK+1          ; die Ablage nicht
+	bcs +
+	lda #14                     ; NO EXPANSION RAM
+	jmp M_DOSFEHLER
++	lda #0
 	sta LZ
 	sta LZ+1
 	lda #ABLAGE_BANK

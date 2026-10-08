@@ -9,6 +9,11 @@ its own graphics, sprite, sound, copper and blitter chips. It boots into
 Microsoft BASIC and also has a machine-code monitor. It reads and writes disk
 images, runs cartridges and can go online through the MiSTer's Linux side.
 
+**This is MERIDIAN 1.0.** From this version on, the memory map, the chip
+registers, the ROM entry points, the BASIC tokens and the file formats are
+fixed: later versions only add. Programs can check the version with
+`PEEK(65506)` (major) and `PEEK(65507)` (minor).
+
 Made by [retro-modern.net](https://retro-modern.net), where you can also
 read how it was built. The full technical reference with every register and
 the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
@@ -23,7 +28,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | | |
 |---|---|
 | CPU | 65C816 at 8 MHz |
-| Memory | 16 MB: 256 KB chip RAM + 15.7 MB expansion RAM (MiSTer SDRAM) |
+| Memory | 16 MB: 256 KB chip RAM + 15.7 MB expansion RAM (MiSTer SDRAM); without an SDRAM module it runs with 256 KB (no workshop) |
 | Graphics (PINSEL) | 320×240, two layers; each is text (40/80 columns), scrolling tiles, or a bitmap with 16 or 256 colours (256 out of 4096) |
 | The PINSEL look | the MERIDIAN-256 start palette (30 colour families of 8 shades), plus three things no machine of the time had: *shine* – 16 palette entries with smooth vertical gradients at 8 bits per channel, *glow* – a light halo around colours marked as luminous, *ink* – a one-pixel outline around sprites and drop shadows of sprites and layer B. All off after reset; see below |
 | Sprites (KOBOLD) | 32 sprites of 16×16 (or 32×32 doubled), 16 colours, no per-line limit, collision detection |
@@ -166,6 +171,7 @@ names are German.
 | `guess.bas` | number guessing with `REPEAT`/`ELSE`, Collatz with `WHILE` |
 | `counter.asm` | test cartridge (save data on drive 0) |
 | `montest.asm` | self-test: assembles and disassembles all 256 opcodes |
+| `pruefstand.asm` | test bench: checks every chip in two seconds and shows OK or the reason (see below) |
 | `krantest`, `dostest`, `ladetest`, `speichertest`, `zusatzdiag` | hardware tests from the build |
 
 Four assembler demos need their graphics, samples or music in memory
@@ -181,6 +187,12 @@ the demo itself last (it starts on its own):
 | `ballett` | `orgel_klaenge.mer`, `ballett_musik.mer`, `ballett_grafik.mer` |
 
 If something is missing, the demo lists the files and returns to BASIC.
+
+`pruefstand.mer` (*Load program* in the OSD) checks chip RAM, expansion
+RAM, KRAN, PINSEL, KOBOLD, ORGEL (silently), LOTSE, PFORTE and the boot
+sector of drive 1 in two seconds:
+
+![The test bench](Screens/TestBench.png)
 
 `zusammenspiel` is on the demo disk together with its logo and sound:
 

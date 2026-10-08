@@ -32,7 +32,9 @@
 ;
 ;  Arbeitsspeicher: Parameterblock $16C0-$16FF, eigene direkte Seite $1700
 ;  (zwischen Bildschirm und Zeichensatz), FAT-Puffer im Zusatzspeicher
-;  $FE:0000 (Systembank).
+;  $FE:0000 (Systembank), ohne SDRAM-Modul $03:FE00. Den FAT-Sektor liest
+;  jeder Aufruf frisch (MERIDIAN 1.0): Zwischen zwei Aufrufen darf ihn
+;  niemand halten, der Puffer gehoert dem DOS nur waehrend eines Aufrufs.
 ;============================================================================
 
 	.cpu "65816"
@@ -66,7 +68,12 @@ ROM        = $FF0000            ; eigene Tabellen nur lang lesen (Datenbank ist 
 EINZEL     = 15
 STAPEL     = 15                 ; Sektoren je Sammelauftrag
 
+	.include "kern_sym.inc"     ; K_NMI: der Fernstart des Kerns
+DOS_LAEUFT = $000388            ; Kern: das DOS arbeitet - ein Fernstart wartet
+START_WARTET = $000389          ;   (MERIDIAN 1.0), bis es fertig ist
 FATPUF     = $FE0000            ; FAT-Sektor im Zusatzspeicher
+FATPUF_CHIP = $03FE00           ;   ohne SDRAM-Modul im Chip-RAM
+BAENKE_K   = $0020              ; Kern: Baenke mit Speicher (ohne Modul 4)
 
 ; Parameterblock (Bank 0)
 D_LW       = $16C0              ; Laufwerk 0-2
@@ -121,6 +128,7 @@ b_n     = $60                   ; Sektoren im Schreibstapel (16 Bit)
 v_lba   = $62                   ; 4 Byte: erster Sektor im Lesevorrat
 v_n     = $66                   ; Sektoren im Lesevorrat (16 Bit, 0: keiner)
 n_st    = $68                   ; Nullsektoren in dieser Runde (LEEREN)
+fpuf    = $6D                   ; 3 Byte: FAT-Puffer (FATPUF oder FATPUF_CHIP)
 
 ldx8	.macro adr                 ; X = Byte (16 Bit, obere Haelfte 0); Akku danach 8 Bit
 	rep #$20
@@ -150,6 +158,8 @@ dos_befehl
 	phd
 	phb
 	pha
+	lda #1                      ; ein Fernstart wartet jetzt, bis das DOS fertig ist
+	sta @l DOS_LAEUFT
 	#akku16
 	lda #$1700
 	tcd
@@ -181,7 +191,14 @@ dos_befehl
 _ende
 	.as
 	sta D_FEHLER
-	plb
+	lda #0
+	sta @l DOS_LAEUFT
+	lda @l START_WARTET          ; kam derweil ein Fernstart? Jetzt ist es sicher
+	beq +
+	lda #0
+	sta @l START_WARTET
+	jml K_NMI
++	plb
 	pld
 	lda @l D_FEHLER
 	rtl
@@ -503,12 +520,28 @@ aufschliessen                   ; A = Fehler (Z gesetzt: gut)
 	and TR_EIN
 	bne +
 	jmp f_kein
-+	lda TR_WECHSEL
++	#akku16                     ; FAT-Puffer: im Zusatzspeicher, wenn es
+	lda #<>FATPUF               ; Bank $FE gibt, sonst im Chip-RAM
+	ldx #`FATPUF
+	ldy @w BAENKE_K
+	cpy #$ff
+	bcs +
+	lda #<>FATPUF_CHIP
+	ldx #`FATPUF_CHIP
++	sta fpuf
+	#akku8
+	txa
+	sta fpuf+2
+	lda TR_WECHSEL
 	and maske
 	bne _neu
 	lda lw
 	cmp D_LW
 	bne _neu
+	jsr fat_leeren              ; dasselbe Laufwerk: die FAT trotzdem frisch
+	#akku8
+	lda #$ff
+	sta csek+3
 	jmp gut
 _neu
 	lda #$ff
@@ -887,12 +920,12 @@ _laden
 	sta csek+2
 	jsr sektor_lesen
 	#akku16
-	ldx #0
--	lda PUF,x
-	sta FATPUF,x
-	inx
-	inx
-	cpx #512
+	ldy #0
+-	lda PUF,y
+	sta [fpuf],y
+	iny
+	iny
+	cpy #512
 	bne -
 _da
 	pla
@@ -904,7 +937,8 @@ _da
 fat_lesen                       ; X = Cluster -> A (16 Bit) = Eintrag
 	jsr fat_holen
 	#akku16
-	lda FATPUF,x
+	txy
+	lda [fpuf],y
 	rts
 
 fat_schreiben                   ; X = Cluster, A (16 Bit) = Eintrag
@@ -913,7 +947,8 @@ fat_schreiben                   ; X = Cluster, A (16 Bit) = Eintrag
 	jsr fat_holen
 	#akku16
 	pla
-	sta FATPUF,x
+	txy
+	sta [fpuf],y
 	#akku8
 	lda #1
 	sta cdirty
@@ -925,12 +960,12 @@ fat_leeren                      ; geaenderten FAT-Puffer in alle FATs schreiben
 	beq _ende
 	jsr seite15
 	#akku16
-	ldx #0
--	lda FATPUF,x
-	sta PUF,x
-	inx
-	inx
-	cpx #512
+	ldy #0
+-	lda [fpuf],y
+	sta PUF,y
+	iny
+	iny
+	cpy #512
 	bne -
 	lda csek
 	sta lba

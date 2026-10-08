@@ -616,12 +616,12 @@ play_befehl                     ; PLAY "noten"[,stimme] (Etappe 11, ROM Bank $FF
 	jsl MUSIK
 	rts
 
-dos_fehlertext                  ; Text zum DOS-Fehler P_WERT (2-9) fuer BASIC, 10-12 Schleifen
+dos_fehlertext                  ; Text zum DOS-Fehler P_WERT (2-9) fuer BASIC, 10-12 Schleifen, 13 SONG, 14 kein Zusatzspeicher
 	.as
 	lda P_WERT
 	sec
 	sbc #2
-	cmp #12
+	cmp #13
 	bcs +
 	asl a
 	#akku16
@@ -636,7 +636,7 @@ dos_fehlertext                  ; Text zum DOS-Fehler P_WERT (2-9) fuer BASIC, 1
 df_tabelle
 	.word df_2, df_3, df_4, df_5, df_6, df_7, df_8, df_9
 	.word df_10, df_11, df_12   ; Etappe 13: Schleifen
-	.word df_13                 ; MERIDIAN 1.0: SONG
+	.word df_13, df_14          ; MERIDIAN 1.0: SONG, Werkstatt ohne Zusatzspeicher
 df_2	.text "FILE NOT FOUND", 0
 df_3	.text "DISK FULL", 0
 df_4	.text "NO DISK", 0
@@ -649,6 +649,7 @@ df_10	.text "WEND WITHOUT WHILE", 0
 df_11	.text "WHILE WITHOUT WEND", 0
 df_12	.text "UNTIL WITHOUT REPEAT", 0
 df_13	.text "NOT A SONG", 0
+df_14	.text "NO EXPANSION RAM", 0
 
 net_befehl                      ; NET "befehl"[,kanal] (Etappe 12, ROM Bank $FF)
 	.as
@@ -1652,6 +1653,8 @@ d_load
 	bne _f
 	ldx #e_bas
 	jsr endung
+	jsr zusatz_da               ; ohne Zusatzspeicher wie frueher direkt
+	bcc _direkt
 	#akku16
 	lda #<>WS_PUFFER
 	sta D_ADR
@@ -1670,6 +1673,31 @@ d_load
 	bne +
 	jsl WS_LADEN                ; A = 0 gut, 8 zu gross; setzt P_LEN
 +	rts
+_direkt
+	#akku16
+	lda P_START
+	sta D_ADR
+	lda P_LEN
+	sta D_LAENGE
+	#akku8
+	lda P_START+2
+	sta D_ADR+2
+	lda P_LEN+2
+	sta D_LAENGE+2
+	stz D_LAENGE+3
+	ldx #0
+	jsr lw_wert
+	lda #0
+	jsl DOS
+	pha
+	#akku16
+	lda D_LAENGE
+	sta P_LEN
+	#akku8
+	lda D_LAENGE+2
+	sta P_LEN+2
+	pla
+	rts
 _f
 	jmp b_fehler
 

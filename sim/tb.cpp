@@ -15,7 +15,7 @@
 // Strg+Buchstabe als {STRGc} - {S:C} sendet nichts.
 //
 // MERIDIAN_MENUE=datei.mer laedt ab Bild MERIDIAN_MENUE_AB (Standard 60)
-// wie aus dem MiSTer-Menue (ioctl): ein Byte alle MERIDIAN_MENUE_ABSTAND
+// wie aus dem MiSTer-Menue (ioctl, WIDE): ein Wort alle MERIDIAN_MENUE_ABSTAND
 // Takte (Standard 6), beachtet ioctl_wait. MERIDIAN_MENUE_INDEX=2 laedt die
 // Datei als Modul (*.MOD, Menue-Eintrag 2), sonst als Programm (1).
 // MERIDIAN_MODUL_AUS=1: Menue-Schalter "Modulstart: aus";
@@ -160,7 +160,12 @@ static std::deque<Taste> tipp_folge(const char* text) {
 // SDRAM-Modell fuer den Zusatzspeicher: wird an jeder fallenden Flanke des
 // 48-MHz-Takts aufgerufen (dort hat das SDRAM wegen des invertierten Takts
 // seine steigende Flanke). CAS-Latenz 2, Burst 1, prueft die Zeitvorgaben.
+// MERIDIAN_OHNE_SDRAM=1: kein Modul gesteckt - der offene Datenbus haelt
+// den zuletzt geschriebenen Wert (der unguenstigste Fall fuer eine
+// Speicherpruefung), gespeichert wird nichts.
 struct Sdram {
+    bool fehlt = getenv("MERIDIAN_OHNE_SDRAM") != nullptr;
+    uint16_t bus = 0;
     std::vector<uint16_t> mem;
     bool aktiv[4] = {false, false, false, false};
     int zeile[4] = {0, 0, 0, 0};
@@ -187,10 +192,12 @@ struct Sdram {
                 if (n - t_act[ba] < 2) meldung("tRCD verletzt");
                 uint32_t w = ((uint32_t)zeile[ba] << 11) | (ba << 9) | (a & 0x1FF);
                 w &= (1u << 23) - 1;
-                if (cmd == 0b0101) { lese_wert = mem[w]; lese_bei = n + 3; lesen++; }
+                if (cmd == 0b0101) { lese_wert = fehlt ? bus : mem[w]; lese_bei = n + 3; lesen++; }
                 else {
                     if (!t->sd_dq_oe) meldung("WRITE ohne Daten");
                     uint16_t d = t->sd_dq_o;
+                    bus = d;
+                    if (fehlt) { schreiben++; if (a & 0x400) aktiv[ba] = false; break; }
                     // wie auf dem MiSTer-Modul: DQML an A11, DQMH an A12
                     bool dqml = (a >> 11) & 1, dqmh = (a >> 12) & 1;
                     if (!dqml) mem[w] = (mem[w] & 0xFF00) | (d & 0x00FF);
@@ -514,27 +521,32 @@ int main(int argc, char** argv) {
                 sd_zustand = sd_schreiben ? 3 : 2;
             }
             break;
+        // hps_io mit WIDE (MERIDIAN 1.0): je Zugriff ein Wort, kleines Byte zuerst
         case 2:                                         // Image -> Puffer
             if (sd_warte == 0) {
                 size_t p = (size_t)sd_block * 512 + sd_i;
-                top->sd_buff_addr = sd_i;
-                top->sd_buff_dout = p < disks[sd_n].d.size() ? disks[sd_n].d[p] : 0;
+                auto b = [&](size_t q) -> int { return q < disks[sd_n].d.size() ? disks[sd_n].d[q] : 0; };
+                top->sd_buff_addr = sd_i / 2;
+                top->sd_buff_dout = b(p) | (b(p + 1) << 8);
                 top->sd_buff_wr = 1;
                 sd_warte = 3;
-                if (++sd_i == sd_len) sd_zustand = 4;
+                sd_i += 2;
+                if (sd_i == sd_len) sd_zustand = 4;
             } else sd_warte--;
             break;
         case 3:                                         // Puffer -> Image
-            if (sd_warte == 0) { top->sd_buff_addr = sd_i; sd_warte = 3; }
+            if (sd_warte == 0) { top->sd_buff_addr = sd_i / 2; sd_warte = 3; }
             else if (--sd_warte == 0) {
                 size_t p = (size_t)sd_block * 512 + sd_i;
                 // wie der MiSTer: nur der Speicherstand (Laufwerk 0) waechst
-                if (p >= disks[sd_n].d.size() && sd_n == 0) disks[sd_n].d.resize(p + 1, 0);
-                if (p < disks[sd_n].d.size()) {
-                    disks[sd_n].d[p] = top->sd_buff_din;
-                    disks[sd_n].geaendert = true;
-                }
-                if (++sd_i == sd_len) sd_zustand = 4;
+                if (p + 1 >= disks[sd_n].d.size() && sd_n == 0) disks[sd_n].d.resize(p + 2, 0);
+                for (int k = 0; k < 2; k++)
+                    if (p + k < disks[sd_n].d.size()) {
+                        disks[sd_n].d[p + k] = (top->sd_buff_din >> (8 * k)) & 0xFF;
+                        disks[sd_n].geaendert = true;
+                    }
+                sd_i += 2;
+                if (sd_i == sd_len) sd_zustand = 4;
             }
             break;
         case 4:
@@ -553,11 +565,11 @@ int main(int argc, char** argv) {
             else if (m_pause > 0) m_pause--;
             else if (m_pos < menue.size()) {
                 if (top->ioctl_wait) m_gewartet++;
-                else {
+                else {                                  // WIDE: ein Wort, ungerade Laenge mit Fuellbyte
                     top->ioctl_addr = m_pos;
-                    top->ioctl_dout = menue[m_pos];
+                    top->ioctl_dout = menue[m_pos] | ((m_pos + 1 < menue.size() ? menue[m_pos + 1] : 0xEE) << 8);
                     top->ioctl_wr = 1;
-                    m_pos++;
+                    m_pos += 2;
                     m_pause = menue_abstand - 1;
                 }
             }

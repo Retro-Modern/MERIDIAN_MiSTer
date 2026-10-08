@@ -3,7 +3,10 @@
 //
 //  Bringt Programme und Daten ins Chip-RAM (Baenke $00-$03) und in den
 //  Zusatzspeicher (Baenke $04-$FE), auf zwei Wegen:
-//   1. aus dem MiSTer-Menue (Datei *.MER, kommt Byte fuer Byte ueber ioctl)
+//   1. aus dem MiSTer-Menue (Datei *.MER, kommt ueber ioctl - seit MERIDIAN
+//      1.0 in 16-Bit-Woertern, hps_io WIDE: BOTE schreibt erst das kleine,
+//      dann das grosse Byte und haelt den MiSTer so lange an; ein Fuellbyte
+//      am Ende einer ungeraden Datei faellt hinter die Laenge im Kopf)
 //   2. ueber das Netz: der Linux-Teil des MiSTer legt das Programm in ein
 //      Postfach im DDR3-RAM (physisch POSTFACH), BOTE schaut alle 2,7 ms
 //      nach und kopiert neue Programme per DMA.
@@ -51,8 +54,8 @@ module bote
 	input             ioctl_download,
 	input       [7:0] ioctl_index,
 	input             ioctl_wr,
-	input      [26:0] ioctl_addr,
-	input       [7:0] ioctl_dout,
+	input      [26:0] ioctl_addr,       // Byteadresse, zaehlt um 2 (WIDE)
+	input      [15:0] ioctl_dout,
 	output            ioctl_wait,
 
 	// Module
@@ -137,7 +140,23 @@ wire ist_modul = (ioctl_index[5:0] == 6'd2);
 
 // Kann ein neues Byte geschrieben werden? (kein Zusatz-Byte mehr offen)
 wire frei_fuer_byte = !zus_req || zus_gnt;
-assign ioctl_wait = zus_req;
+reg [23:0] dl_len;
+reg        hi_offen;                // Menue: das grosse Byte des Worts steht noch aus
+reg [26:0] hi_adr;
+reg  [7:0] hi_dat;
+assign ioctl_wait = zus_req || hi_offen;
+
+// Menue: Byte d an Stelle a der Datei (Kopf, Programm oder Modul)
+task menue_byte(input [26:0] a, input [7:0] d);
+	begin
+		if (ist_modul) schreibe_modul(a, d);
+		else if (a < 27'd16) kopf[a[3:0]] <= d;
+		else if (k_gut && (k_len == 24'd0 || a[23:0] - 24'd16 < k_len)) begin
+			schreibe(a[23:0] - 24'd16, d);
+			dl_len <= a[23:0] - 24'd15;
+		end
+	end
+endtask
 
 //////////////////////////////  Netz: DDR3-Postfach  ////////////////////////
 
@@ -168,7 +187,6 @@ endtask
 //////////////////////////////  Ablauf  ////////////////////////////////////
 
 reg  dl_alt;
-reg [23:0] dl_len;
 reg  dl_modul;                      // laufendes Menue-Laden ist ein Modul
 reg  raus_alt;
 
@@ -178,6 +196,7 @@ always @(posedge clk) begin
 	ram_we <= 1'b0;
 	if (zus_gnt) zus_req <= 1'b0;
 	dl_alt <= ioctl_download;
+	if (dl_alt && !ioctl_download) dl_ende <= 1'b1;   // Menue-Laden zu Ende
 	if (nmi_cnt != 7'd0) nmi_cnt <= nmi_cnt - 7'd1;
 	if (reset_cnt != 8'd0) reset_cnt <= reset_cnt - 8'd1;
 
@@ -189,23 +208,26 @@ always @(posedge clk) begin
 	end
 
 	//---------------- Menue ----------------
-	if (ioctl_download) begin
+	if (ioctl_download || hi_offen) begin
 		halt <= 1'b1;
-		if (!dl_alt) begin                     // Beginn: Modul oder Programm?
+		if (ioctl_download && !dl_alt) begin   // Beginn: Modul oder Programm?
 			dl_modul <= ist_modul;
 			if (ist_modul) modul_da <= 1'b0;    // altes Modul ist weg
 		end
-		if (ioctl_wr) begin
-			if (ist_modul) schreibe_modul(ioctl_addr, ioctl_dout);
-			else if (ioctl_addr < 27'd16) kopf[ioctl_addr[3:0]] <= ioctl_dout;
-			else if (k_gut) begin
-				schreibe(ioctl_addr[23:0] - 24'd16, ioctl_dout);
-				dl_len <= ioctl_addr[23:0] - 24'd15;
+		if (hi_offen) begin                    // grosses Byte, sobald das kleine steht
+			if (frei_fuer_byte) begin
+				hi_offen <= 1'b0;
+				menue_byte(hi_adr, hi_dat);
 			end
 		end
+		else if (ioctl_wr) begin
+			menue_byte(ioctl_addr, ioctl_dout[7:0]);
+			hi_offen <= 1'b1;
+			hi_adr   <= ioctl_addr + 27'd1;
+			hi_dat   <= ioctl_dout[15:8];
+		end
 	end
-	else if (dl_alt || dl_ende) begin      // Menue-Laden fertig ...
-		dl_ende <= 1'b1;
+	else if (dl_ende) begin                // Menue-Laden fertig ...
 		if (frei_fuer_byte) begin             // ... sobald das letzte Byte geschrieben ist
 			dl_ende <= 1'b0;
 			halt    <= 1'b0;
@@ -308,6 +330,7 @@ always @(posedge clk) begin
 	if (reset) begin
 		halt          <= 1'b0;
 		zus_req       <= 1'b0;
+		hi_offen      <= 1'b0;
 		dl_ende       <= 1'b0;
 		dl_modul      <= 1'b0;
 		geladen       <= 1'b0;

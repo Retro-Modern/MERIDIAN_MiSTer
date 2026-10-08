@@ -52,7 +52,14 @@ ws_sichern
 	.as
 	.xl
 	.dpage 0
-	jsr ws_hat_daten            ; A = belegte Abschnitte (Bits 0-2)
+	#akku16                     ; ohne Zusatzspeicher (kein SDRAM-Modul)
+	lda K_BAENKE                ; gibt es keine Werkstatt-Daten
+	cmp #$fd
+	#akku8
+	lda #0
+	bcc +
+	jsr ws_hat_daten
++	cmp #0            ; A = belegte Abschnitte (Bits 0-2)
 	bne _mit
 	#akku16                     ; nur das Programm
 	lda P_START
