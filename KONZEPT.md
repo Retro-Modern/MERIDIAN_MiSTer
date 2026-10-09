@@ -1274,6 +1274,55 @@ Frequenz und Lautstärke (Gleiten und Fallen mit einer Teilung je Schritt).
 `anzeige_zuruecksetzen` setzt `SFX_AN` auf 0, beim Verlassen der Werkstatt
 verstummen alle Klänge.
 
+**Vorführspiel GLOWMINE** (`GLOWMINE.BAS` auf der Vorführdiskette): ein
+kleiner Plattformer, der alles aus der Werkstatt benutzt – ein Bergmann sammelt
+30 Goldstücke in einer Höhle, weicht zwei Fledermäusen und der Lava aus und
+findet den Ausgang. Die Datei ist eine Cartridge wie aus `SAVE`: Programm,
+27 Spritemuster, 57 Kacheln, beide Karten, 7 Klänge, Look und Zeichensatz.
+`LOAD "GLOWMINE"` und F1–F6 zeigen alles in den Reitern.
+- Die Daten male ich nicht in der Werkstatt, sondern in Python
+  (`programme/glowmine.py`): Figuren und Kacheln Punkt für Punkt als
+  Zeichenketten mit Legende, die Karte aus Rechtecken. `tools/cartridge.py`
+  setzt sie im Format von `ws_datei.asm` zusammen; `cartridge.py liste` zeigt
+  die Abschnitte einer Datei, `cartridge.py bilder` malt Sprites, Kacheln,
+  Karten, Palette und Zeichensatz mit der Palette der Cartridge als PNG.
+- Das BASIC-Programm entsteht aus `programme/glowmine.bas.vorlage`; Münzen,
+  Fledermäuse, Tür und Start schreibt das Werkzeug als DATA dazu.
+- **Karten:** Karte 1 (Ebene A) ist die Höhlenwand, Karte 2 (Ebene B) das
+  Spielfeld. `MAP 2,c` und `MAP 1,c/2` rollen sie verschieden schnell
+  (Parallaxe); die Tusche wirft den Schatten von Ebene B auf Ebene A.
+- **TILE():** Eine Tabelle `Z()` ordnet jeder Kachel ihre Art zu: Fels (1),
+  Planke (2, trägt nur von oben), Lava (4), Münze (8), offene Tür (16).
+  `TILE 2,x,y,0` nimmt eine Münze, sechs `TILE` öffnen die Tür. Jedes Spiel
+  legt die Münzen aus den DATA-Zeilen wieder hin – ein abgebrochenes Spiel
+  hinterlässt die Karte im Speicher sonst ohne sie.
+- **SFX:** Sprung, Münze, Treffer, Landen, Tür und Ziel; dazu ein Bass in
+  a-Moll als Klang mit Schleife (Stimme 1). `PLAY` spielt die Titelmusik.
+- **LOOK:** eigene Farben für den Bergmann (Bank 13) und eine dunklere
+  Höhlenwand (Bank 9), Leuchten für Gold, Lava, Laternen, Amethyst, Pilze und
+  die Lampe am Helm, Tusche (Kontur um die Figuren, Schatten der Ebene B) und
+  ein kräftiger Zeichensatz für die Texte.
+
+**BASIC für 30 Schritte je Sekunde.** Ein Schritt (Eingabe, vier oder fünf
+`TILE()`, drei `SPRITE`, zwei `MAP`, `HIT`) muss unter 33 ms bleiben. Gemessen
+im Simulator: Ein später angelegter Name kostet bei jedem Zugriff rund 0,3 ms
+mehr als ein früher – MS-BASIC sucht Variablen der Reihe nach. Eine Kommazahl
+als Konstante (`7.5`) kostet 0,5 ms, weil BASIC sie bei jedem Durchlauf neu
+umwandelt (mit einer Division). Daher:
+- die häufigsten Variablen zuerst anlegen (Zeile 10), Kommazahlen in
+  Variablen (Zeile 20), ganze Zahlen direkt hinschreiben;
+- Kachelkoordinaten mitführen und nur addieren (`xt=xt+vt`) statt `(x+4)/8`
+  zu rechnen;
+- am Boden nur den hinteren Fuß prüfen; die Fledermäuse wippen nach ihrer
+  Position (`D(M1 AND 15)`) statt nach einem eigenen Zähler;
+- `REPEAT … UNTIL` als Hauptschleife (springt ohne Zeilensuche zurück).
+
+Achtung: Nur die ersten zwei Buchstaben eines Namens zählen – `B11` und `B13`
+wären dieselbe Variable. Und wer Tasten mit `KEY()` liest, muss den
+Tastenpuffer trotzdem leeren (GLOWMINE: `GET K$`, solange eine Taste gedrückt
+ist): Esc bricht nur ab, wenn es vorne im Puffer steht – hinter den Zeichen
+von Pfeilen und Leertaste käme es nie an.
+
 ## Werkzeuge
 
 | Aufgabe | Befehl |
@@ -1316,6 +1365,10 @@ verstummen alle Klänge.
 | Ohne SDRAM-Modul simulieren | `MERIDIAN_OHNE_SDRAM=1 ./obj_dir/meridian_sim …` (der offene Datenbus hält den zuletzt geschriebenen Wert, gespeichert wird nichts) |
 | Modul in der Simulation | `MERIDIAN_MENUE=../programme/counter.mod MERIDIAN_MENUE_INDEX=2 [MERIDIAN_MODUL_AUS=1] [MERIDIAN_MODUL_RAUS=bild] ./obj_dir/meridian_sim …` |
 | In der Simulation tippen | `MERIDIAN_TIPPEN='m d000\n' ./obj_dir/meridian_sim 3 out 0 170` |
+| Joystick 1 in der Simulation halten | `MERIDIAN_JOY="bild:wert;…" ./obj_dir/meridian_sim …` (ab Bild gilt wert, Bits wie `JOY(1)`) |
+| Cartridge am Mac prüfen (Abschnitte, Bilder) | `python3 tools/cartridge.py liste SPIEL.BAS [--disk BILD.DSK]` · `../.venv/bin/python tools/cartridge.py bilder SPIEL.BAS ordner/` |
+| GLOWMINE bauen (Daten, Programm, Cartridge) | `python3 programme/glowmine.py [--bilder ordner]` → `programme/glowmine.bas`, `programme/daten/glowmine.mws` |
+| GLOWMINE durchspielen lassen (Nachbau der Spiellogik, geplanter Weg) | `python3 programme/glowmine_durchlauf.py` · Testfassung mit Eingaben aus DATA: `--test GMTEST.BAS --disk BILD.DSK`, im Simulator `LOAD "GMTEST"`, `RUN`, `MERIDIAN_JOY="300:16;310:0"` |
 
 ## Etappen
 

@@ -169,6 +169,7 @@ names are German.
 | `starfall.bas` | a small mouse/joystick game with music |
 | `chat.bas` | chat over TCP (counterpart: `tools/chat.py`) |
 | `guess.bas` | number guessing with `REPEAT`/`ELSE`, Collatz with `WHILE` |
+| `glowmine.py` | GLOWMINE, a platformer with all its workshop data in one file (see below) |
 | `counter.asm` | test cartridge (save data on drive 0) |
 | `montest.asm` | self-test: assembles and disassembles all 256 opcodes |
 | `pruefstand.asm` | test bench: checks every chip in two seconds and shows OK or the reason (see below) |
@@ -284,6 +285,43 @@ file format and the details.
 
 ![The workshop: LOOK](Screens/Workshop_LOOK.png)
 
+## A game from the workshop: GLOWMINE
+
+`GLOWMINE.BAS` on the demo disk is a small platformer that uses everything
+the workshop holds: a miner collects 30 gold nuggets in a cave, dodges two
+bats and the lava and finds the way out. Arrows or joystick run; space, up
+or fire jump.
+
+```basic
+LOAD "GLOWMINE"
+RUN
+```
+
+![GLOWMINE on the MiSTer](Screens/GLOWMINE.png)
+
+The file is a cartridge like the ones `SAVE` writes: the BASIC program plus
+27 sprite patterns, 57 tiles, both maps, 7 sounds, the look and a font.
+After Esc, **F1–F6** show all of it in the workshop – change a tile, go back
+with F10 and `RUN` again. In the program, `SPRITE` moves the miner and the
+bats; map 1 (the cave wall) and map 2 (the playfield) scroll at different
+speeds for parallax; `TILE()` tells rock, planks, lava, gold and the door
+apart, and `TILE` takes the gold away; `SFX` plays jump, coin, hit and door
+sounds and a looping bass line, `PLAY` the title tune; `LOOK` brings the
+palette, the glow of gold, lava and lanterns, the ink and the font.
+
+![GLOWMINE's data in the workshop: SPRITES, TILES, MAP, SOUNDS, LOOK, FONT](Screens/GLOWMINE_Workshop.png)
+
+The data was not painted in the workshop but written in Python
+(`programme/glowmine.py`: sprites and tiles as strings, the maps from
+rectangles). `tools/cartridge.py` puts it together in the workshop's file
+format – the same works for your own games – and takes a cartridge apart
+again: `cartridge.py liste GAME.BAS` lists its sections, `cartridge.py
+bilder GAME.BAS dir/` draws sprites, tiles, maps, palette and font as PNG
+files (needs Pillow). `programme/glowmine_durchlauf.py` replays the game
+logic in Python along a planned route, so a change to the level can be
+checked before it goes on the disk. `KONZEPT.md` (section *Werkstatt*) has
+the details, among them how to get BASIC to 30 steps per second.
+
 ## Building
 
 - **Core:** Quartus Prime Lite 17.0.2, the usual MiSTer version. Open
@@ -296,9 +334,13 @@ file format and the details.
 - **Simulation:** Verilator. Run `make` in `sim/`, then
   `./obj_dir/meridian_sim <seconds> <outdir> 0 <frames…>`.
   `sim/nmi_test` tests the CPU core alone (NMI during IRQ entry).
+  `MERIDIAN_JOY="frame:value;…"` holds joystick 1 from a given frame on
+  (bits as in `JOY(1)`).
 - **Your own programs:** `programme/bauen.sh name` assembles to a `.MER`.
-  `tools/bas.py` turns BASIC text into `.BAS`, and `tools/disk.py` creates and
-  fills FAT16 disk images on a PC or Mac.
+  `tools/bas.py` turns BASIC text into `.BAS` (it reads `basic/basic.lbl`,
+  which `rom/bauen.sh` writes), `tools/cartridge.py` builds and checks
+  workshop cartridges, and `tools/disk.py` creates and fills FAT16 disk
+  images on a PC or Mac.
 
 Source comments, scripts and the documentation are in German.
 

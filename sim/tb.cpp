@@ -381,6 +381,19 @@ int main(int argc, char** argv) {
     bool rtc_gestellt = false;
     top->joy0 = 0;
     top->joy1 = 0;
+    // MERIDIAN_JOY="bild:wert;...": ab Bild den Joystick 1 halten (Bits wie JOY(1))
+    std::deque<std::pair<int, int>> joy;
+    if (getenv("MERIDIAN_JOY")) {
+        std::string l = getenv("MERIDIAN_JOY");
+        size_t a = 0;
+        while (a < l.size()) {
+            size_t e = l.find(';', a);
+            if (e == std::string::npos) e = l.size();
+            int b = 0, w = 0;
+            if (sscanf(l.substr(a, e - a).c_str(), "%d:%d", &b, &w) == 2) joy.push_back({b, w});
+            a = e + 1;
+        }
+    }
     top->layout_mac = 0;
     top->ioctl_download = 0;
     top->ioctl_index = getenv("MERIDIAN_MENUE_INDEX") ? atoi(getenv("MERIDIAN_MENUE_INDEX")) : 1;
@@ -453,6 +466,10 @@ int main(int argc, char** argv) {
             top->rtc[0] = bcd(tm.tm_sec) | bcd(tm.tm_min) << 8 | bcd(tm.tm_hour) << 16 | bcd(tm.tm_mday) << 24;
             top->rtc[1] = bcd(tm.tm_mon + 1) | bcd(tm.tm_year) << 8 | (uint32_t)tm.tm_wday << 16 | 0x40u << 24;
             top->rtc[2] = 1;
+        }
+        if (!joy.empty() && frame >= joy.front().first) {
+            top->joy0 = joy.front().second;
+            joy.pop_front();
         }
         // Mausereignisse
         if (!maus.empty() && frame >= maus.front().bild) {

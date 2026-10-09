@@ -29,6 +29,7 @@ python3 tools/bas.py rein programme/chat.bas CHAT.BAS --disk $ZIEL/MERIDIAN.DSK
 python3 tools/bas.py rein programme/guess.bas GUESS.BAS --disk $ZIEL/MERIDIAN.DSK
 python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK taktstock/nebel.tak NEBEL.TAK
 python3 tools/bas.py rein programme/abend.bas ABEND.BAS --disk $ZIEL/MERIDIAN.DSK
+python3 programme/glowmine.py >/dev/null && python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/daten/glowmine.mws GLOWMINE.BAS
 programme/bauen.sh montest >/dev/null && python3 tools/disk.py rein $ZIEL/MERIDIAN.DSK programme/montest.mer
 python3 tools/disk.py neu $ZIEL/BLANK1.DSK --mb 8 --name BLANK1
 python3 tools/disk.py neu $ZIEL/BLANK2.DSK --mb 8 --name BLANK2
