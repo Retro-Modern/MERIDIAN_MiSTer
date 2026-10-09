@@ -32,11 +32,13 @@ module meridian_core
 	parameter BASIC_FILE = "rom/basic.hex",
 	parameter DOS_FILE   = "rom/dos.hex",
 	parameter SONG_FILE  = "rom/song.hex",
-	parameter WERK_FILE  = "rom/werkstatt.hex"
+	parameter WERK_FILE  = "rom/werkstatt.hex",
+	parameter WIDE       = 1    // Laufwerke: 1 = 16 Bit (MiSTer), 0 = 8 Bit (MEGA65)
 )
 (
 	input         clk,          // 24 MHz
 	input         clk48,        // 48 MHz, phasengleich (SDRAM)
+	input         clk_sd,       // Takt der Laufwerksseite (nur WIDE = 0, TRUHE)
 	input         reset,
 	input         pal,
 
@@ -47,6 +49,7 @@ module meridian_core
 	input  [15:0] joy0,
 	input  [15:0] joy1,
 	input         layout_mac,
+	input         layout_m65,   // MEGA65-Tastatur (Bit 1 von PFORTE $0C; MiSTer: 0)
 
 	input         ioctl_download,   // Laden aus dem MiSTer-Menue
 	input   [7:0] ioctl_index,      // 1 Programm (*.MER), 2 Modul (*.MOD)
@@ -65,9 +68,9 @@ module meridian_core
 	output  [2:0] sd_rd,
 	output  [2:0] sd_wr,
 	input   [2:0] sd_ack,
-	input  [12:0] sd_buff_addr,     // Wortadresse (hps_io WIDE)
-	input  [15:0] sd_buff_dout,
-	output [15:0] sd_buff_din,
+	input  [(WIDE ? 12 : 13):0] sd_buff_addr,   // WIDE: Wortadresse, sonst Byte
+	input  [(WIDE ? 15 :  7):0] sd_buff_dout,
+	output [(WIDE ? 15 :  7):0] sd_buff_din,
 	input         sd_buff_wr,
 
 	output [28:0] ddr_addr,         // DDR3: Postfach (BOTE) und Fenster (DRAHT)
@@ -431,6 +434,7 @@ pforte pforte
 	.joy0(joy0),
 	.joy1(joy1),
 	.layout_mac(layout_mac),
+	.layout_m65(layout_m65),
 	.reg_addr(io_a[7:0]),
 	.reg_din(io_d),
 	.reg_dout(pfo_dout),
@@ -753,9 +757,10 @@ zusatz zusatz
 
 wire [7:0] truhe_dout;
 
-truhe truhe
+truhe #(.WIDE(WIDE)) truhe
 (
 	.clk(clk),
+	.clk_sd(clk_sd),
 	.reset(!cpu_rst_n),
 	.adr(a[8:0]),
 	.sel_reg(is_truhe),

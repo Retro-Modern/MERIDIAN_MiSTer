@@ -51,7 +51,10 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
    `RUN`.
 
 The OSD also offers *Load program* (`.MER` files),
-*Insert cartridge* (`.MOD`), NTSC/PAL and stereo width.
+*Insert cartridge* (`.MOD`), NTSC/PAL and stereo width. With PAL the core
+really runs at 50.3 Hz (NTSC: 59.95 Hz), but over HDMI the MiSTer keeps its
+own output rate unless `vsync_adjust=1` or `2` is set in `MiSTer.ini` – then
+it follows the core, if the display accepts 50 Hz.
 
 **Keyboard:** the layout is German (QWERTZ, with umlauts), as a PC or Mac
 variant (OSD *Keyboard*). `Esc` stops a program, `Shift+Home` clears the
@@ -106,6 +109,31 @@ C64's SMON:
   fires an NMI exactly one instruction after the monitor's `RTI`.
 - Also: `F` fill, `T` transfer, `C` compare, `H` hunt, `L`/`S` load and save,
   `DIR`, `$ # %` to convert numbers. `?` lists everything.
+
+## Sending programs from your computer
+
+`tools/senden.py` puts a program straight into the running MERIDIAN over the
+network and starts it – for a write, assemble, run loop on a PC. It needs
+Python 3 and ssh (built into Windows 10/11, macOS and Linux) and logs in to
+the MiSTer as `root` (factory password `1`; with an ssh key there is no
+prompt).
+
+```sh
+python3 tools/senden.py 192.168.1.50 program.bin --lade 2000 --start 2000
+python3 tools/senden.py 192.168.1.50 program.mer
+```
+
+(On Windows: `py tools\senden.py ...`.) A raw binary, for example from
+64tass or ca65, is loaded at `--lade` and started at `--start` (hex; the
+start defaults to the load address, `--kein-start` only loads it). `.MER`
+files carry both addresses in their 16-byte header; `tools/mer.py` builds
+them. The program is called with `JSL`, an `RTL` returns to `READY.`.
+Several files are sent one after the other, the program usually last.
+Nothing is written while another core is running.
+
+Behind it, a few lines of Python on the MiSTer write the file into a
+mailbox in the DDR3 memory; the BOTE chip in the core notices, pauses the
+CPU, copies the data by DMA and starts the program through an NMI.
 
 ## Network and folder drive (optional)
 

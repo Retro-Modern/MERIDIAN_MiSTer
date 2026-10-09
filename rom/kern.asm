@@ -367,6 +367,9 @@ haupt
 -	jsr getin
 	beq haupt
 	jsr taste_verarbeiten
+	#akku8
+	lda #19                     ; Cursor beim naechsten Bild wieder zeigen
+	sta blink                   ; (wie in zeile_lesen)
 	bra -
 
 ; "GELADEN $aaaaaa-$eeeeee" nach einem Ladevorgang ohne Autostart
@@ -863,6 +866,23 @@ cursor_aus
 +	stz blink
 	rts
 
+; Leere Zelle unter dem Cursor bekommt die aktuelle Vordergrundfarbe, bevor
+; er dort eingeschaltet wird - so zeigt er eine neue Farbe sofort
+cursor_farbe
+	jsr cursor_adr
+	lda BILDSCHIRM,x
+	cmp #' '
+	bne +
+	lda BILDSCHIRM+1,x
+	and #$f0
+	pha
+	lda farbe
+	and #$0f
+	ora 1,s
+	sta BILDSCHIRM+1,x
+	pla
++	rts
+
 ;============================================================================
 ; Ausgabehilfen
 
@@ -1072,7 +1092,7 @@ tastatur
 +	rts
 
 ereignis
-	jsr taste_merken            ; fuer KEY() (Etappe 11)
+	jsr m65_ereignis            ; fuer KEY() (Etappe 11); MEGA65-Tastatur davor
 	lda ev_code
 	cmp #$12
 	beq _umschalt
@@ -1135,10 +1155,10 @@ uebersetzen
 	lda umsch
 	and #$01
 	bne _gross
-	lda tab_normal,x
+	jsr m65_normal              ; lda tab_normal,x (MEGA65: eigene Liste)
 	bra _strg
 _gross
-	lda tab_shift,x
+	jsr m65_shift               ; lda tab_shift,x (MEGA65: eigene Liste)
 _strg
 	pha
 	lda umsch
@@ -1156,7 +1176,7 @@ _ohne
 	pla
 	rts
 _alt
-	lda PFO_LAYOUT
+	jsr m65_alt                 ; lda PFO_LAYOUT (MEGA65: ALT = Umlaute)
 	and #$01
 	bne _mac
 	lda tab_altgr,x
@@ -1173,8 +1193,9 @@ _nichts
 	lda #0
 	rts
 _e0
-	lda ev_code
-	cmp #$6c                    ; Umschalt + Pos1 = Bildschirm loeschen
+	jsr m65_e0                  ; lda ev_code / cmp #$6c (MEGA65: Umschalt/MEGA + E0)
+	nop
+	                            ; Umschalt + Pos1 = Bildschirm loeschen
 	bne +
 	lda umsch
 	and #$01
@@ -1775,7 +1796,9 @@ _warten
 	cmp #$03                    ; Esc in der Eingabe: nichts
 	beq _warten
 	jsr chrout
-	bra _warten
+	lda #19                     ; Cursor beim naechsten Bild wieder zeigen: so
+	sta blink                   ; bleibt er sichtbar, waehrend man ihn bewegt
+	bra _warten                 ; (wie beim C64)
 _fertig
 	stz blink_frei
 	jsr cursor_aus
@@ -2120,6 +2143,10 @@ irq_kern
 	cmp #20
 	bcc _haken
 	stz blink
+	lda blinkon                 ; wird er eingeschaltet: leere Zelle in der
+	bne _blink_an               ; aktuellen Farbe
+	jsr cursor_farbe
+_blink_an
 	jsr cursor_umschalten
 _haken
 	lda SONG_AN                 ; SONG: Timer A gibt den Takt - nur mit dem
@@ -2305,6 +2332,186 @@ l_dostext
 	sta P_WERT
 	jsr dos_fehlertext
 	rtl
+
+;============================================================================
+; MEGA65-Tastatur (PFORTE $C10C Bit 1 - setzt nur der MEGA65-Port, am MiSTer
+; ist es 0). Eingehaengt an vier Stellen von ereignis und uebersetzen, die
+; dafuer je einen Befehl gleicher Laenge hergeben; ohne das Bit laeuft dort
+; alles wie bisher. Die Listen erzeugt tools/tastatur.py (tastatur_m65.inc).
+;  - Zeichen wie auf den MEGA65-Tasten: Umschalt+3 = #, +7 = ', +0 = {,
+;    +: = [, +; = ], +, = <, +. = >, +/ = ?, +Pfeil links = `, = ungeschaltet, Pfund = #
+;  - MEGA-Taste (E0 1F) als Umschalter, Bit 3 von umsch: | { } ~ \ `
+;  - ALT: ä ö ü ß, mit Umschalt Ä Ö Ü
+;  - Umschalt + F1/F3/.../F13 = F2/F4/.../F14 (auch fuer KEY() und die
+;    Werkstatt); Umschalt + INST/DEL = Einfuegen, Umschalt + CRSR rechts/
+;    runter = links/hoch
+
+m65_an                          ; Z = 0: MEGA65-Belegung an
+	.as
+	.xl
+	lda PFO_LAYOUT
+	and #$02
+	rts
+
+; Liste ab m65_listen+Y nach ev_code durchsuchen: C = 1 gefunden, A = Zeichen
+m65_suche
+	.as
+	.xl
+-	lda m65_listen,y
+	beq _nein
+	cmp ev_code
+	beq _ja
+	iny
+	iny
+	bra -
+_ja
+	lda m65_listen+1,y
+	sec
+	rts
+_nein
+	clc
+	rts
+
+; in ereignis statt "jsr taste_merken": MEGA-Taste merken, F-Tasten mit
+; Umschalt umsetzen; beim Loslassen beide (F1 und F2) loslassen
+m65_ereignis
+	.as
+	.xl
+	jsr m65_an
+	beq _merken
+	lda ev_info
+	and #$02
+	beq _f
+	lda ev_code
+	cmp #$1f                    ; E0 1F: MEGA
+	bne _merken
+	lda #$08
+	trb umsch
+	lda ev_info
+	lsr a                       ; Bit 0: losgelassen
+	bcs _merken
+	lda #$08
+	tsb umsch
+	bra _merken
+_f
+	ldy #m65_l_ftasten-m65_listen
+	jsr m65_suche
+	bcc _merken
+	tay                         ; Y = Zwilling (F2, F4, ...)
+	lda ev_info
+	lsr a
+	bcs _los
+	lda umsch
+	lsr a                       ; Umschalt?
+	bcc _merken
+	tya
+	sta ev_code
+	bra _merken
+_los
+	lda ev_code
+	pha
+	tya
+	sta ev_code
+	jsr taste_merken            ; den Zwilling loslassen
+	pla
+	sta ev_code
+_merken
+	jmp taste_merken
+
+; in uebersetzen statt "lda tab_normal,x" / "lda tab_shift,x" (X = Scancode)
+m65_normal
+	.as
+	.xl
+	jsr m65_an
+	beq _pc
+	ldy #m65_l_normal-m65_listen
+	bra m65_taste
+_pc
+	lda tab_normal,x
+	rts
+m65_shift
+	.as
+	.xl
+	jsr m65_an
+	beq _pc
+	ldy #m65_l_shift-m65_listen
+	bra m65_taste
+_pc
+	lda tab_shift,x
+	rts
+m65_taste                       ; MEGA: deren Liste, sonst Y, sonst die Tabelle
+	.as
+	.xl
+	lda umsch
+	and #$08
+	beq _liste
+	ldy #m65_l_mega-m65_listen
+	jsr m65_suche
+	bcs _ende
+	lda #0
+	rts
+_liste
+	jsr m65_suche
+	bcs _ende
+	lda umsch
+	lsr a
+	bcs _gross
+	lda tab_normal,x
+	rts
+_gross
+	lda tab_shift,x
+_ende
+	rts
+
+; in uebersetzen (_alt) statt "lda PFO_LAYOUT": ALT = Umlaute
+m65_alt
+	.as
+	.xl
+	jsr m65_an
+	bne _m65
+	lda PFO_LAYOUT              ; nicht MEGA65: wie bisher
+	rts
+_m65
+	ldy #m65_l_alt-m65_listen
+	lda umsch
+	lsr a
+	bcc _suchen
+	ldy #m65_l_altshift-m65_listen
+_suchen
+	jsr m65_suche
+	bcs m65_fertig
+	lda #0
+m65_fertig                      ; A ist das Ergebnis von uebersetzen
+	tay
+	pla                         ; Ruecksprung in uebersetzen verwerfen
+	pla
+	tya
+	rts
+
+; in uebersetzen (_e0) statt "lda ev_code / cmp #$6c": Umschalt + / = ?,
+; Umschalt + CRSR rechts/runter = links/hoch, MEGA + / = \
+m65_e0
+	.as
+	.xl
+	jsr m65_an
+	beq _weiter
+	ldy #m65_l_e0mega-m65_listen
+	lda umsch
+	and #$08
+	bne _suchen
+	ldy #m65_l_e0shift-m65_listen
+	lda umsch
+	lsr a
+	bcc _weiter
+_suchen
+	jsr m65_suche
+	bcs m65_fertig
+_weiter
+	lda ev_code
+	cmp #$6c
+	rts
+
+	.include "tastatur_m65.inc"
 
 ;============================================================================
 ; Sprungtabelle (feste Adressen fuer Programme)

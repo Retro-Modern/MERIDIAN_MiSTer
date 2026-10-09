@@ -33,11 +33,22 @@
 //  Seit MERIDIAN 1.0 laeuft hps_io mit 16 Bit Breite (WIDE): Das Rahmenwerk
 //  schreibt und liest den Puffer wortweise (kleines Byte zuerst), die CPU
 //  weiter byteweise - doppelter Durchsatz zwischen ARM und FPGA.
+//
+//  Parameter WIDE (Vorgabe 1, MiSTer): 0 schaltet auf den 8-Bit-Pfad mit
+//  14 Adressbits, wie ihn MiSTer2MEGA65 (vdrives) kann. Dort laeuft die
+//  Seite des Rahmenwerks (sd_rd/sd_wr/sd_ack, sd_buff_*) im Takt clk_sd
+//  (QNICE, 50 MHz): Der Puffer hat dann zwei Ports in zwei Takten (CPU und
+//  Rahmenwerk), Anfrage und Antwort laufen ueber Synchronisierstufen.
+//  Mit WIDE = 1 ist clk_sd unbenutzt.
 //============================================================================
 
 module truhe
+#(
+	parameter WIDE = 1                  // 1: 16 Bit (MiSTer hps_io), 0: 8 Bit (MEGA65)
+)
 (
 	input             clk,
+	input             clk_sd,           // Takt des Rahmenwerks (nur WIDE = 0)
 	input             reset,
 
 	// CPU: Register ($C900) und Puffer ($CA00)
@@ -54,12 +65,12 @@ module truhe
 	input      [63:0] img_size,
 	output     [31:0] sd_lba,
 	output      [5:0] sd_blk_cnt,
-	output reg  [2:0] sd_rd,
-	output reg  [2:0] sd_wr,
+	output      [2:0] sd_rd,
+	output      [2:0] sd_wr,
 	input       [2:0] sd_ack,
-	input      [12:0] sd_buff_addr,     // Wortadresse (hps_io WIDE)
-	input      [15:0] sd_buff_dout,
-	output     [15:0] sd_buff_din,
+	input  [(WIDE ? 12 : 13):0] sd_buff_addr,   // WIDE: Wortadresse, sonst Byte
+	input  [(WIDE ? 15 :  7):0] sd_buff_dout,
+	output [(WIDE ? 15 :  7):0] sd_buff_din,
 	input             sd_buff_wr
 );
 
@@ -72,9 +83,14 @@ reg  [3:0] anzahl_m1;               // Bloecke je Auftrag - 1
 reg  [2:0] eingelegt = 3'd0, schreibschutz = 3'd0, wechsel = 3'd0;
 reg [31:0] bloecke [0:2];
 reg        arbeitet, fehler, ack_war;
+reg  [2:0] lese_anf, schreib_anf;   // Anfrage an das Rahmenwerk
+wire [2:0] ack;                     // seine Antwort im Takt clk
+wire [7:0] puf_q;                   // Puffer, Byte fuer die CPU
 
 assign sd_lba     = block;
 assign sd_blk_cnt = {2'b00, anzahl_m1};
+
+generate if (WIDE) begin : breit
 
 // Puffer, 8 KB als zwei Haelften (gerade und ungerade Bytes) mit je einem
 // Port: Solange ein Auftrag laeuft, gehoeren sie dem Rahmenwerk (ein Wort
@@ -107,7 +123,64 @@ always @(posedge clk) begin
 	q_ungerade <= adr[0];
 end
 assign sd_buff_din = {q_u, q_g};
-wire [7:0] puf_q = q_ungerade ? q_u : q_g;
+assign puf_q       = q_ungerade ? q_u : q_g;
+assign ack         = sd_ack;
+assign sd_rd       = lese_anf;
+assign sd_wr       = schreib_anf;
+
+end else begin : schmal
+
+// 8 Bit (MEGA65): Puffer mit zwei Ports - A fuer die CPU (clk), B fuer das
+// Rahmenwerk (clk_sd, Byteadresse). Beim Schreiben liefern beide Ports die
+// neuen Daten. Die Anfrage geht ueber zwei Stufen nach clk_sd, die Antwort
+// (sd_ack) ueber zwei Stufen nach clk. Block, Anzahl und erste Seite stehen
+// fest, bevor die Anfrage drueben ankommt; die Seite geht wie die Anfrage
+// ueber zwei Stufen.
+reg  [7:0] puffer [0:8191];
+reg  [7:0] q_a, q_b;
+(* ASYNC_REG = "TRUE" *) reg [3:0] basis_s1, basis_s2;
+always @(posedge clk_sd) begin
+	basis_s1 <= basis;
+	basis_s2 <= basis_s1;
+end
+wire [12:0] a_adr = {seite, adr};
+wire [12:0] b_adr = {basis_s2 + sd_buff_addr[12:9], sd_buff_addr[8:0]};
+wire        a_we  = we && sel_puf;
+wire        b_we  = sd_buff_wr && (|sd_ack);
+
+always @(posedge clk) begin
+	if (a_we) begin
+		puffer[a_adr] <= din;
+		q_a           <= din;
+	end
+	else q_a <= puffer[a_adr];
+end
+always @(posedge clk_sd) begin
+	if (b_we) begin
+		puffer[b_adr] <= sd_buff_dout;
+		q_b           <= sd_buff_dout;
+	end
+	else q_b <= puffer[b_adr];
+end
+assign sd_buff_din = q_b;
+assign puf_q       = q_a;
+
+(* ASYNC_REG = "TRUE" *) reg [2:0] ack_s1, ack_s2;
+always @(posedge clk) begin
+	ack_s1 <= sd_ack;
+	ack_s2 <= ack_s1;
+end
+assign ack = ack_s2;
+
+(* ASYNC_REG = "TRUE" *) reg [5:0] anf_s1, anf_s2;
+always @(posedge clk_sd) begin
+	anf_s1 <= {schreib_anf, lese_anf};
+	anf_s2 <= anf_s1;
+end
+assign sd_rd = anf_s2[2:0];
+assign sd_wr = anf_s2[5:3];
+
+end endgenerate
 
 wire [2:0] lw_bit = 3'b001 << laufwerk;
 
@@ -124,12 +197,12 @@ always @(posedge clk) begin
 
 	// laufender Auftrag: Anfrage halten, bis das Rahmenwerk antwortet,
 	// fertig, wenn seine Antwort endet
-	ack_war <= |(sd_ack & lw_bit);
-	if (sd_ack & lw_bit) begin
-		sd_rd <= 3'd0;
-		sd_wr <= 3'd0;
+	ack_war <= |(ack & lw_bit);
+	if (ack & lw_bit) begin
+		lese_anf    <= 3'd0;
+		schreib_anf <= 3'd0;
 	end
-	if (arbeitet && ack_war && !(sd_ack & lw_bit)) arbeitet <= 1'b0;
+	if (arbeitet && ack_war && !(ack & lw_bit)) arbeitet <= 1'b0;
 
 	if (we && sel_reg) begin
 		case (adr[3:0])
@@ -140,8 +213,8 @@ always @(posedge clk) begin
 					fehler   <= 1'b0;
 					arbeitet <= 1'b1;
 					basis    <= seite;
-					if (din[0]) sd_rd <= lw_bit;
-					else        sd_wr <= lw_bit;
+					if (din[0]) lese_anf    <= lw_bit;
+					else        schreib_anf <= lw_bit;
 				end
 			end
 			4'h1: if (!arbeitet) laufwerk <= (din[1:0] == 2'd3) ? 2'd2 : din[1:0];
@@ -157,8 +230,8 @@ always @(posedge clk) begin
 	end
 
 	if (reset) begin
-		sd_rd     <= 3'd0;
-		sd_wr     <= 3'd0;
+		lese_anf    <= 3'd0;
+		schreib_anf <= 3'd0;
 		arbeitet  <= 1'b0;
 		fehler    <= 1'b0;
 		laufwerk  <= 2'd1;

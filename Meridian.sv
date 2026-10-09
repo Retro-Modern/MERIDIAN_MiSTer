@@ -203,6 +203,7 @@ meridian_core core
 (
 	.clk(clk_sys),
 	.clk48(clk_48),
+	.clk_sd(clk_sys),
 	.reset(reset),
 	.pal(status[2]),
 
@@ -213,6 +214,7 @@ meridian_core core
 	.joy0(joystick_0[15:0]),
 	.joy1(joystick_1[15:0]),
 	.layout_mac(status[3]),
+	.layout_m65(1'b0),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index[7:0]),

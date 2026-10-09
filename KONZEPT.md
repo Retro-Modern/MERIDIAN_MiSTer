@@ -80,7 +80,10 @@ Spätere Fassungen fügen hinzu, verschieben aber nichts.
   Schreibzugriffe passieren genau am CPU-Takt.
 - Bild: jeder zweite Takt ein Punkt → **12 MHz Punkttakt**, 764 Punkte pro
   Zeile → **15,71 kHz**, 262 Zeilen → **59,95 Hz** (NTSC) bzw. 312 Zeilen →
-  **50,3 Hz** (PAL). Sichtbar 640 × 240 Punkte.
+  **50,3 Hz** (PAL). Sichtbar 640 × 240 Punkte. Über HDMI gibt der MiSTer
+  trotzdem seine eigene Bildrate aus (meist 60 Hz), solange in der
+  `MiSTer.ini` nicht `vsync_adjust=1` oder `2` steht – dann folgt er dem
+  Core, wenn das Display 50 Hz kann.
 
 - ZUSATZ (SDRAM): **48 MHz** aus derselben PLL, phasengleich zum Systemtakt.
 
@@ -375,11 +378,15 @@ belegt, wartet er. Bank `$FF` (BASIC-ROM) beschreibt er nicht.
    Das Rahmenwerk schickt die Datei Byte für Byte, BOTE schreibt sie ins RAM;
    solange ein Byte für den Zusatzspeicher offen ist, bremst er den MiSTer
    über `ioctl_wait`.
-2. **Netz:** `tools/senden.py programm.mer` schreibt am Mac per SSH in ein
+2. **Netz:** `tools/senden.py <MiSTer> programm.mer` schreibt per SSH in ein
    Postfach im DDR3-RAM des MiSTer (physisch `$3E000000`). BOTE schaut alle
    2,7 ms nach. Ist die Folgenummer neu, hält er die CPU an (RDY), kopiert
    per DMA und gibt sie wieder frei. Bei mehreren Dateien wartet `senden.py`
-   je nach Größe, bis BOTE fertig sein muss.
+   je nach Größe, bis BOTE fertig sein muss. `<MiSTer>` ist die IP-Adresse
+   oder der ssh-Name; angemeldet wird als root. Rohe Binärdateien (etwa aus
+   64tass oder ca65) nimmt es auch: `tools/senden.py 192.168.1.50
+   programm.bin --lade 2000 --start 2000` baut den MER-Kopf selbst, mit
+   Autostart. Läuft ein anderer Core, schreibt es nichts (`/tmp/CORENAME`).
 
 Bei Autostart löst BOTE danach einen **NMI** aus. Das Kern-ROM setzt Stapel,
 Interrupts und Haken zurück, meldet „REMOTE START $aaaaaa“ und startet das
@@ -1335,7 +1342,7 @@ von Pfeilen und Leertaste käme es nie an.
 | Grafikdaten erzeugen | `../.venv/bin/python tools/grafik.py` |
 | Klänge und Musik für ORGEL | `../.venv/bin/python tools/orgel.py` |
 | Grafik für BALLETT | `cd tools && ../../.venv/bin/python ballett.py` |
-| BALLETT per Netz | `~/Claude/mister/tools/senden.py programme/daten/orgel_klaenge.mer programme/daten/ballett_musik.mer programme/daten/ballett_grafik.mer programme/ballett.mer` |
+| BALLETT per Netz | `tools/senden.py mister programme/daten/orgel_klaenge.mer programme/daten/ballett_musik.mer programme/daten/ballett_grafik.mer programme/ballett.mer` |
 | Ton der Hardware mitschneiden (lückenlos) | `~/Claude/mister/.venv/bin/python ~/Claude/mister/tools/ton.py 20 ziel.wav` |
 | Ton der Simulation mitschneiden | `MERIDIAN_TON=out/ton.raw ./obj_dir/meridian_sim …` (Stereo, s16le, 48 kHz) |
 | Programm bauen (MER) | `programme/bauen.sh rasterbalken` |
@@ -1347,7 +1354,7 @@ von Pfeilen und Leertaste käme es nie an.
 | Daten und Programm ZUSAMMENSPIEL | `../.venv/bin/python programme/zusammenspiel.py` |
 | Schreibzugriffe der CPU verfolgen | `MERIDIAN_SCHREIBSPUR=0003a0-0003ff ./obj_dir/meridian_sim …` |
 | Laden aus dem Menü simulieren | `MERIDIAN_MENUE=datei.mer [MERIDIAN_MENUE_ABSTAND=1] ./obj_dir/meridian_sim …` |
-| Programm per Netz starten | `~/Claude/mister/tools/senden.py programme/rasterbalken.mer` |
+| Programm per Netz starten | `tools/senden.py mister programme/rasterbalken.mer` |
 | Programm in der Simulation | `MERIDIAN_SENDEN=../programme/rasterbalken.mer ./obj_dir/meridian_sim 3 out 0 170` |
 | Auf dem MiSTer tippen | `~/Claude/mister/tools/tippen.py 'm d000\n'` |
 | BASIC am Mac schreiben (Text → .BAS, auch direkt auf eine Diskette) | `python3 tools/bas.py rein spiel.bas SPIEL.BAS [--disk BILD.DSK]` · zurück: `bas.py liste SPIEL.BAS` oder `bas.py liste BILD.DSK SPIEL.BAS` |

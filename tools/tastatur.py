@@ -9,7 +9,16 @@ Steuercodes des Kerns: $01 Pos1, $03 Stopp, $08 Rueckschritt, $09 Tab,
 $0D Return, $0E Einfuegen, $7F Entf, $1C rechts, $1D links, $1E hoch,
 $1F runter.
 
-    python3 tools/tastatur.py   -> rom/tastatur.inc
+    python3 tools/tastatur.py   -> rom/tastatur.inc, rom/tastatur_m65.inc
+
+MEGA65-Belegung (PFORTE $C10C Bit 1, nur der MEGA65-Port): Der Wandler im
+Port schickt Buchstaben und Ziffern nach Beschriftung, die uebrigen Tasten
+auf festen Scancodes (meridian_m65/CORE/rtl/m65_tasten.sv). Die Listen hier
+sagen nur, wo die MEGA65-Tasten etwas anderes zeigen als das deutsche Layout:
+Zeichen wie auf den Tasten und in matrix_to_ascii.vhdl des MEGA65-Kerns
+(Umschalt+3 = #, +7 = ', +0 = {, +: = [ ...; MEGA-Taste fuer | { } ~ Rueckstrich `),
+ALT fuer die Umlaute. Je Liste Paare (Scancode, Zeichen), Ende mit 0;
+Zeichen 0 = die Taste zeigt nichts.
 """
 import os
 
@@ -39,6 +48,20 @@ GRUND = {
     0x7B: ("-", "-"), 0x7C: ("*", "*"),
 }
 
+# MEGA65: Abweichungen vom deutschen Layout (Scancodes aus m65_tasten.sv)
+M65_NORMAL = {0x4C: ":", 0x52: ";", 0x54: "@", 0x55: "=", 0x61: "_"}   # £ gibt es im Zeichensatz nicht: #
+M65_SHIFT = {0x26: "#", 0x3D: "'", 0x45: "{", 0x5B: "", 0x4A: "", 0x49: ">",
+             0x41: "<", 0x4C: "[", 0x52: "]", 0x54: "", 0x55: "_", 0x5D: "",
+             0x7C: "", 0x0E: "", 0x61: "`", 0x66: "\x0e"}   # Umschalt+INST/DEL = Einfuegen
+M65_MEGA = {0x49: "|", 0x4C: "{", 0x41: "~", 0x52: "}", 0x61: "`"}
+M65_ALT = {0x1C: "ä", 0x44: "ö", 0x3C: "ü", 0x1B: "ß"}
+M65_ALTSHIFT = {0x1C: "Ä", 0x44: "Ö", 0x3C: "Ü"}
+# E0-Tasten: Umschalt + / = ?, Umschalt + CRSR rechts/runter = links/hoch; MEGA + / = \
+M65_E0SHIFT = {0x4A: "?", 0x74: "\x1d", 0x72: "\x1e"}
+M65_E0MEGA = {0x4A: "\\"}
+# Umschalt + F1/F3/F5/F7/F9/F11/F13 = F2/F4/.../F14 (Scancodes)
+M65_FTASTEN = {0x05: 0x06, 0x04: 0x0C, 0x03: 0x0B, 0x83: 0x0A, 0x01: 0x09, 0x78: 0x07, 0x08: 0x10}
+
 ALTGR_PC = {0x15: "@", 0x3D: "{", 0x3E: "[", 0x46: "]", 0x45: "}", 0x4E: "\\",
             0x5B: "~", 0x61: "|"}
 OPTION_MAC = {0x4B: "@", 0x2E: "[", 0x36: "]", 0x3D: "|", 0x3E: "{", 0x46: "}",
@@ -58,6 +81,35 @@ def tabelle(name, eintraege):
     return "\n".join(zeilen)
 
 
+def liste(name, eintraege):
+    b = []
+    for code, z in eintraege.items():
+        w = z if isinstance(z, int) else (ord(z) if z else 0)
+        assert w < 256 and code != 0, (name, code)
+        b += [code, w]
+    b.append(0)
+    return f"{name}\n\t.byte " + ",".join(f"${x:02x}" for x in b)
+
+
+def main_m65():
+    teile = [
+        "; Automatisch erzeugt von tools/tastatur.py - nicht von Hand aendern.",
+        "; MEGA65-Belegung: Paare (Scancode, Zeichen), Ende mit 0",
+        "m65_listen",
+        liste("m65_l_normal", M65_NORMAL),
+        liste("m65_l_shift", M65_SHIFT),
+        liste("m65_l_mega", M65_MEGA),
+        liste("m65_l_alt", M65_ALT),
+        liste("m65_l_altshift", M65_ALTSHIFT),
+        liste("m65_l_e0shift", M65_E0SHIFT),
+        liste("m65_l_e0mega", M65_E0MEGA),
+        liste("m65_l_ftasten", M65_FTASTEN),
+    ]
+    ziel = os.path.join(os.path.dirname(ZIEL), "tastatur_m65.inc")
+    with open(ziel, "w", encoding="ascii") as f:
+        f.write("\n".join(teile) + "\n")
+
+
 def main():
     teile = [
         "; Automatisch erzeugt von tools/tastatur.py - nicht von Hand aendern.",
@@ -70,6 +122,7 @@ def main():
     with open(ZIEL, "w", encoding="ascii") as f:
         f.write("\n\n".join(teile) + "\n")
     print(f"rom/tastatur.inc: {len(GRUND)} Tasten")
+    main_m65()
 
 
 if __name__ == "__main__":
