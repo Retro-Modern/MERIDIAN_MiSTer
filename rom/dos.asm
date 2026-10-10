@@ -1253,14 +1253,15 @@ n_berechnen                     ; n = min(512 - skip, rest)
 	#akku8
 	rts
 
-rest_null                       ; Z gesetzt: rest = 0
+rest_null                       ; Z gesetzt: rest = 0; Akku danach 8 Bit
 	#akku16
 	lda rest
 	ora rest+2
-	php
-	#akku8
-	plp
-	rts
+	#akku8                      ; sep laesst Z stehen. Frueher php/plp: plp
+	rts                         ; holte auch die alte Akkubreite (16 Bit)
+	                            ; zurueck, inc/cmp s_cl liefen in 16 Bit und
+	                            ; verglichen mit spc + spc_sh * 256 - bei 2
+	                            ; Sektoren je Cluster nie gleich (10.10.2026)
 
 ;----------------------------------------------------------------------------
 ; 0 LADEN

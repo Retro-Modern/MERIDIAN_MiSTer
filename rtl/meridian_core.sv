@@ -122,6 +122,7 @@ wire cpu_ce = (cyc == 2'd2);
 // oder ausgeworfen); der Zusatzspeicher (SDRAM-Steuerung) bleibt dabei
 // unberuehrt, sein Inhalt - das Modul - auch
 wire bote_reset;
+wire bote_menue;                // BOTE laedt aus dem Menue (auch im Reset)
 wire modul_da;                  // Modul steckt (BOTE), $40-$7F ist ROM
 wire neustart = reset | bote_reset;
 
@@ -459,6 +460,7 @@ bote bote
 	.modul_raus(modul_raus),
 	.modul_da(modul_da),
 	.reset_anf(bote_reset),
+	.menue_aktiv(bote_menue),
 	.ddr_addr(b_ddr_addr),
 	.ddr_rd(b_ddr_rd),
 	.ddr_busy(b_ddr_busy),
@@ -600,7 +602,7 @@ reg         wp_gueltig;                 // Wortpuffer
 reg  [22:0] wp_adr;
 reg  [15:0] wp_daten;
 reg         z_ack24;
-reg         z_laeuft;                   // ein Auftrag ist unterwegs ...
+reg         z_laeuft = 1'b0;            // ein Auftrag ist unterwegs ...
 reg   [1:0] z_wer;                      // ... von 0: CPU, 1: KRAN/BOTE, 2: ORGEL, 3: Echo
 reg         z_w16;                      // Wort schreiben (Echo)
 reg  [15:0] z_din16;
@@ -608,6 +610,10 @@ reg         z_cpu_an, z_cpu_da;         // CPU: Auftrag gestellt / Lesedaten da
 reg   [7:0] z_cpu_q;
 wire        z_erledigt = z_laeuft && (z_ack24 == z_req_t);
 wire        z_bereit   = !z_laeuft || z_erledigt;
+// Reset der SDRAM-Steuerung und dieser Verteilung: mit dem Rechner, aber
+// nicht, solange BOTE aus dem Menue laedt (das Rahmenwerk laedt das Modul beim
+// Core-Start im Reset), und nicht mitten in einem Auftrag
+wire        reset_z    = reset && !bote_menue && !z_laeuft;
 // Treffer im Wortpuffer - nur, wenn der Kunde selbst keinen Lesezugriff
 // mehr unterwegs hat (sonst kaeme die Antwort in falscher Reihenfolge)
 wire        cpu_treffer  = zus_zugriff && cpu_we_n && wp_gueltig && a[23:1] == wp_adr && !z_cpu_an;
@@ -716,7 +722,7 @@ always @(posedge clk) begin
 		z_cpu_an <= 1'b0;
 		z_cpu_da <= 1'b0;
 	end
-	if (reset) begin
+	if (reset_z) begin
 		z_req_t    <= 1'b0;
 		z_laeuft   <= 1'b0;
 		z_w16      <= 1'b0;
@@ -729,7 +735,7 @@ end
 zusatz zusatz
 (
 	.clk(clk48),
-	.reset(reset),
+	.reset(reset_z),
 	.req_t(z_req_t),
 	.adr(z_adr),
 	.we(z_we),

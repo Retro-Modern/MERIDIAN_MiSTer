@@ -51,7 +51,9 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
    `RUN`.
 
 The OSD also offers *Load program* (`.MER` files),
-*Insert cartridge* (`.MOD`), NTSC/PAL and stereo width. With PAL the core
+*Insert cartridge* (`.MOD` – the MiSTer remembers the cartridge and inserts
+it again at every core start; *Remove* in the file dialog takes it out),
+NTSC/PAL and stereo width. With PAL the core
 really runs at 50.3 Hz (NTSC: 59.95 Hz), but over HDMI the MiSTer keeps its
 own output rate unless `vsync_adjust=1` or `2` is set in `MiSTer.ini` – then
 it follows the core, if the display accepts 50 Hz.

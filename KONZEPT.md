@@ -411,6 +411,9 @@ BOTE legt die Datei ohne Kopf ab `$40:0000` in den Zusatzspeicher (bis
 4 MB), merkt sich „Modul steckt“ und startet den Rechner neu. Der Merker
 übersteht jeden Reset; nur „Eject cartridge“ im Menü löscht ihn (und startet
 wieder neu). Programme lädt BOTE nicht in einen steckenden Modulbereich.
+Seit dem 10.10.2026 heißt der Eintrag `FSC2`: Das Rahmenwerk merkt sich das
+gewählte Modul (`config/MERIDIAN.f2`) und lädt es bei jedem Start des Cores
+von selbst; im Dateidialog nimmt „Remove“ es wieder heraus.
 
 ## Module
 

@@ -63,6 +63,7 @@ module bote
 	input             modul_raus,       // Menue: Modul auswerfen
 	output reg        modul_da = 1'b0,  // Modul steckt: $40-$7F schreibgeschuetzt
 	output            reset_anf,        // Rechner neu starten
+	output            menue_aktiv,      // Menue-Laden laeuft (auch im Reset)
 
 	// DDR3 (Avalon, 64 Bit)
 	output reg [28:0] ddr_addr,
@@ -191,6 +192,12 @@ reg  dl_modul;                      // laufendes Menue-Laden ist ein Modul
 reg  raus_alt;
 
 reg  dl_ende;                       // Menue-Laden fertig, letztes Byte noch offen?
+
+// Das Rahmenwerk laedt Dateien mit "C" im Menueeintrag (FSC2: das Modul) beim
+// Start des Cores, waehrend es ihn im Reset haelt. Ein Menue-Laden laeuft
+// darum auch im Reset zu Ende; solange haelt meridian_core die SDRAM-
+// Steuerung aus dem Reset heraus.
+assign menue_aktiv = ioctl_download || dl_alt || hi_offen || dl_ende;   // dl_alt: der Takt, in dem es endet
 
 always @(posedge clk) begin
 	ram_we <= 1'b0;
@@ -328,11 +335,13 @@ always @(posedge clk) begin
 	end
 
 	if (reset) begin
-		halt          <= 1'b0;
-		zus_req       <= 1'b0;
-		hi_offen      <= 1'b0;
-		dl_ende       <= 1'b0;
-		dl_modul      <= 1'b0;
+		if (!menue_aktiv) begin           // ein Menue-Laden laeuft zu Ende
+			halt      <= 1'b0;
+			zus_req   <= 1'b0;
+			hi_offen  <= 1'b0;
+			dl_ende   <= 1'b0;
+			dl_modul  <= 1'b0;
+		end
 		geladen       <= 1'b0;
 		start_an      <= 1'b0;
 		nmi_cnt       <= 7'd0;

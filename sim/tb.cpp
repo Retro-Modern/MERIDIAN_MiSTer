@@ -18,6 +18,9 @@
 // wie aus dem MiSTer-Menue (ioctl, WIDE): ein Wort alle MERIDIAN_MENUE_ABSTAND
 // Takte (Standard 6), beachtet ioctl_wait. MERIDIAN_MENUE_INDEX=2 laedt die
 // Datei als Modul (*.MOD, Menue-Eintrag 2), sonst als Programm (1).
+// MERIDIAN_MENUE_IM_RESET=1: wie das Rahmenwerk beim Core-Start (Eintraege
+// mit "C", FSC2): laedt gleich, solange der Rechner im Reset steht, und
+// laesst ihn erst 10 ms nach dem Laden los.
 // MERIDIAN_MODUL_AUS=1: Menue-Schalter "Modulstart: aus";
 // MERIDIAN_MODUL_RAUS=n: "Modul auswerfen" in Bild n.
 //
@@ -426,8 +429,15 @@ int main(int argc, char** argv) {
     long zyklen = 0;
 
     uint64_t takte = (uint64_t)(sekunden * TAKT);
+    const bool im_reset = getenv("MERIDIAN_MENUE_IM_RESET") != nullptr;
+    uint64_t reset_los = 0;
     for (uint64_t t = 0; t < takte; t++) {
-        if (t == 50) top->reset = 0;
+        if (t == 50 && !im_reset) top->reset = 0;
+        if (im_reset && m_fertig && reset_los == 0) reset_los = t + TAKT / 100;
+        if (im_reset && reset_los && t == reset_los) {
+            top->reset = 0;
+            printf("Bild %d: Reset los (nach dem Laden im Reset)\n", frame);
+        }
 
         // Tippen: ab dem Startbild alle Tasten als Ereignisfolge einplanen
         if (frame == tipp_ab && !tippen.empty() && ereignisse.empty()) {
@@ -555,8 +565,9 @@ int main(int argc, char** argv) {
             if (sd_warte == 0) { top->sd_buff_addr = sd_i / 2; sd_warte = 3; }
             else if (--sd_warte == 0) {
                 size_t p = (size_t)sd_block * 512 + sd_i;
-                // wie der MiSTer: nur der Speicherstand (Laufwerk 0) waechst
-                if (p + 1 >= disks[sd_n].d.size() && sd_n == 0) disks[sd_n].d.resize(p + 2, 0);
+                // wie der MiSTer: nur der Speicherstand (Laufwerk 0) waechst, und
+                // nur durch Anhaengen - ein Block hinter einer Luecke kommt nicht an
+                if (sd_n == 0 && p == disks[sd_n].d.size()) disks[sd_n].d.resize(p + 2, 0);
                 for (int k = 0; k < 2; k++)
                     if (p + k < disks[sd_n].d.size()) {
                         disks[sd_n].d[p + k] = (top->sd_buff_din >> (8 * k)) & 0xFF;
@@ -577,7 +588,7 @@ int main(int argc, char** argv) {
 
         // Laden aus dem Menue (ioctl), wartet wie der MiSTer auf ioctl_wait
         top->ioctl_wr = 0;
-        if (!menue.empty() && frame >= menue_ab && !m_fertig) {
+        if (!menue.empty() && (im_reset ? t >= 1000 : frame >= menue_ab) && !m_fertig) {
             if (!m_an) { top->ioctl_download = 1; m_an = true; m_pause = 20; }
             else if (m_pause > 0) m_pause--;
             else if (m_pos < menue.size()) {

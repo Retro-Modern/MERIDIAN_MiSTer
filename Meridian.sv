@@ -62,7 +62,7 @@ localparam CONF_STR = {
 	"S1,DSKIMGHDF,Drive 1;",
 	"S2,DSKIMGHDF,Drive 2;",
 	"-;",
-	"FS2,MOD,Insert cartridge;",
+	"FSC2,MOD,Insert cartridge;",
 	"O[6],Cartridge start,Auto,Off;",
 	"T[7],Eject cartridge;",
 	"-;",
@@ -88,7 +88,8 @@ wire  [15:0] ioctl_dout;            // WIDE: 16 Bit je Schreibzugriff
 wire         ioctl_wait;
 
 // Laufwerke (TRUHE): Index 0 Speicherstand eines Moduls (legt der MiSTer
-// beim Einstecken als /saves/MERIDIAN/<modul>.sav an, "FS2"), 1 und 2 Images
+// beim Einstecken als /saves/MERIDIAN/<modul>.sav an, "FS"; "C": der MiSTer
+// merkt sich das Modul und steckt es bei jedem Core-Start wieder ein), 1 und 2 Images
 wire  [2:0] img_mounted;
 wire        img_readonly;
 wire [63:0] img_size;
