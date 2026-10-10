@@ -45,7 +45,8 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
    MiSTer SD card.
 2. Optional: unzip `extras/MERIDIAN_disks.zip` into
    `/media/fat/games/MERIDIAN/`. It holds the demo disk `MERIDIAN.DSK`, two
-   blank disks and the test cartridge `COUNTER.MOD`.
+   blank disks and the test cartridge `COUNTER.MOD`. The mining game
+   `extras/TIEFGANG.MOD` goes into the same folder (see below).
 3. Start the core. It boots into BASIC with *47102 BYTES FREE*.
 4. Insert a disk in the OSD under *Drive 1*. Then `DIR`, `LOAD "STARFALL"`,
    `RUN`.
@@ -352,6 +353,52 @@ logic in Python along a planned route, so a change to the level can be
 checked before it goes on the disk. `KONZEPT.md` (section *Werkstatt*) has
 the details, among them how to get BASIC to 30 steps per second.
 
+## A cartridge game: TIEFGANG
+
+A 2D mining game in machine code: dig down through six layers – topsoil,
+clay and gravel, crystal grottos, mushroom forest, a sunken city, the
+glowing core – sell what you find in the village, upgrade pick, lamp and
+backpack, and dig deeper. Every world grows from its name (`GRAUER DACHS 7`:
+32 × 32 × 64 names, 16 bits of seed), 32 × 512 blocks, generated on the
+MERIDIAN in about two seconds.
+
+![TIEFGANG on the MiSTer](Screens/TIEFGANG.png)
+
+**Goal:** at the bottom of every world lies the *Meridian Heart*. Dig it
+out and carry it to the museum in the village – that completes the world.
+
+**Daily race:** `W` on the title starts today's shaft – everyone plays the
+same world that day, with the same start (no money, level 1 tools, five
+ladders; your own progress waits until you are back). Points are all the
+Taler you earn (selling, museum, the kobold's pneumatic post), plus 1000 for
+the heart and a time bonus of 1800 minus your seconds. After the race the
+game enters your name and points in the online ranking of the day; `B` on
+the title shows it, `N` sets your name (up to 8 letters). The ranking needs
+the network service `tools/draht.py` (see *Network and folder drive*);
+without it everything else works, just without the online part. Only the
+name you choose and your points, time and heart are stored, no addresses –
+see the [privacy notice](https://retro-modern.net/en/privacy.html).
+
+![The TIEFGANG title](Screens/TIEFGANG_Title.png)
+
+**Install:** copy `extras/TIEFGANG.MOD` to `/media/fat/games/MERIDIAN/` and
+choose it in the OSD under *Insert cartridge*. It starts at every core start
+(OSD *Cartridge start*); `Esc` on the title goes to BASIC. The save lives in
+the cartridge's own save memory.
+
+**Keys** (joystick in brackets): arrows walk, up or `X` jumps (B) – in the
+air against a wall once more: wall jump; space digs (A), with down/up below
+or above you; up at a door or in a lift; `L` places a ladder (Start); `E`
+pings the echo sounder (C) – the nearest hidden treasure answers in stereo;
+`R` sends your backpack to the village by pneumatic post (D); `Esc` back to
+the title. On the title: up/down change the world name, left/right pick the
+part, `T` today's shaft, `R` a random world, space: dig in.
+
+What it uses of the machine: unseen ores glimmer in the dark (PINSEL glow),
+the lamp's light cone moves with the miner (GLANZ), the status bar is text
+mode over the tile map in one frame (LOTSE), the echo sounder runs through
+the ORGEL's filter and echo, two TAKTSTOCK songs play from expansion RAM.
+
 ## Building
 
 - **Core:** Quartus Prime Lite 17.0.2, the usual MiSTer version. Open
@@ -394,3 +441,6 @@ the forum at [forum.retro-modern.net](https://forum.retro-modern.net), category
 - Sound samples in the demos were made with ElevenLabs.
 - **MERIDIAN 816:** © 2026 [retro-modern.net](https://retro-modern.net).
   GPL-3.0-or-later, see [LICENSE](LICENSE).
+- **TIEFGANG** (`extras/TIEFGANG.MOD`): © 2026
+  [retro-modern.net](https://retro-modern.net). Free to play and to pass on
+  unchanged; its source is not part of this repository.
