@@ -118,7 +118,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$00:D000–$00:FFFF` | Kern-ROM, Version `$FFE2/$FFE3`, Vektoren ab `$FFE4` |
 | `$01:0000–$01:FFFF` | RAM Bank 1; mit BASIC: Datenbank (Kopie des BASIC-Codes `$2000–$47FF`, Programm, Variablen und Zeichenketten `$4800–$FFFF`) |
 | `$02:0000–$03:FFFF` | RAM Bänke 2–3 (Grafikdaten). Mit BASIC: Grafik `$02:0000–$03:2BFF`, GRADIENT-Tabelle `$03:2C00`, Copper-Liste `$03:2E00–$03:3D03`, Kern: gedrückte Tasten `$03:3E00–$03:3EFF` und Treffer `$03:3F00` (Etappe 11), Werkstatt: 256 Kacheln `$03:4000–$03:5FFF` und die Karten 1 und 2 `$03:6000–$03:7FFF` (MERIDIAN 1.0), frei ab `$03:8000` |
-| `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab; die Werkstatt nutzt `$F8–$FC` (siehe Werkstatt) |
+| `$04:0000–$FE:FFFF` | Zusatzspeicher (SDRAM), 250 Bänke = 15,6 MB (ohne `$FD`); BASIC legt SAVE ohne Namen in Bank `$10` ab; die Werkstatt nutzt `$F8–$FC` (siehe Werkstatt), ATLAS `$12–$3F` und `$ED–$F7` (siehe HORIZONT und ATLAS) |
 | `$FD:0000–$FD:FFFF` | DRAHT: 64 KB DDR3 (physisch `$3E100000`), nur für die CPU; Postfach zum Netzdienst (Etappe 12) |
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
 | `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`; ohne SDRAM-Modul `$03:FE00`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
@@ -471,12 +471,14 @@ schreibt Status und Antworttext und zuletzt die Antwort-Nummer.
 | `$FD:` | |
 |---|---|
 | `$00` / `$01` | Anfrage-Nr (MERIDIAN) / Antwort-Nr (Dienst) |
-| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand, 4–8 Laufwerk 3 (siehe DOS) |
+| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand, 4–11 Laufwerk 3 (siehe DOS) und ATLAS, 12/13 Radio, 20 SID JAM, 21 Netz-Jam von TAKTSTOCK |
 | `$03` / `$04` | Kanal 0–4 / Länge der Anfrage |
 | `$06/$07` | Status (16 Bit mit Vorzeichen) |
 | `$08` | Länge der Antwort |
 | `$10` | Herzschlag des Dienstes (zählt alle 50 ms) |
+| `$20` / `$21` | Lebenszeichen der Apps JAM / RADIO (ihr Interrupt zählt je Bild). Der Dienst schreibt für RADIO und SID JAM nur durch ein Tor ins Fenster: Es schließt bei Stopp, bei Laufwerk 3, beim Netz-Jam, bei einem anderen Core – und wenn das Lebenszeichen 1,5 s steht (Reset). Sonst schrieben ihre Fäden weiter in die Dateidaten von Laufwerk 3 |
 | `$100` / `$200` | Anfragetext / Antworttext (je bis 255 Zeichen) |
+| `$0300–$0FFF` | Netz-Jam von TAKTSTOCK: Stand, Eingang `$0400`, Ausgang `$0800`; RADIO nutzt `$0400`/`$0800` für Spektrum und Cover |
 | `$1000–$FFFF` | Dateidaten für Laufwerk 3 (bis 60 KB je Anfrage, Etappe 14) |
 
 Der MERIDIAN-Teil liegt im ROM von Bank `$FF` (`rom/netz.asm`, `$FF4009`):
@@ -1333,6 +1335,133 @@ Tastenpuffer trotzdem leeren (GLOWMINE: `GET K$`, solange eine Taste gedrückt
 ist): Esc bricht nur ab, wenn es vorne im Puffer steht – hinter den Zeichen
 von Pfeilen und Leertaste käme es nie an.
 
+## HORIZONT und ATLAS – die grafische Oberfläche (Oktober 2026)
+
+**HORIZONT** ist ein Baukasten für Programme mit Menüleiste, Fenstern,
+Listen, Knöpfen, Rückfragen und Eingabefeld im PINSEL-Look: eine Bibliothek
+ab `$00:5000` mit 47 Einsprüngen zu je drei Bytes (`JSL`, aus jeder Bank und
+auch aus dem Monitor-Assembler). **ATLAS** ist der Dateiverwalter darauf: zwei Listen
+mit den Laufwerken 0–3, kopieren, verschieben, löschen, umbenennen, RUN,
+VIEW, Vorschau nach Inhalt und Netztransfer über eine Browser-Seite. Am Core
+und am ROM ändert beides nichts.
+
+| Wo | Was (solange ATLAS läuft) |
+|---|---|
+| `$00:4800–$4BFF` | direkte Seite (`$4800`, `$00–$7F` HORIZONT, `$80–$FF` ATLAS) und Variablen von HORIZONT |
+| `$00:4FE0–$4FFF` | Sprungbrett von `ATLAS.BAS` für `USR` |
+| `$00:5000–$79DC` | HORIZONT; dahinter bis `$7FFF` Variablen und Texte von ATLAS |
+| `$00:8000–$B47F` | ATLAS: fester Teil, dahinter der Bereich für Überlagerungen (DATEI, START, ZEIGEN) |
+| `$00:B400–$B47F` | nach RUN eines BASIC-Programms: der Tipp-Haken (tippt `LOAD` und `RUN`) |
+| `$03:8000–$03:FDFF` | Textschirm, Zeichensatz, LOTSE-Liste, Kastenstapel (gerettet und zurückgeholt) |
+| `$12:0000–$3F:FFFF` | Puffer zum Kopieren und für VIEW (bis 2,9 MB) |
+| `$C0:0000–$DF:FFFF` | RAM-Disk (Laufwerk 4): Verzeichnis in `$C0`, Daten ab `$C1:0000`; übersteht einen Reset |
+| `$ED:0000–$ED:FFFF` | `ATLAS.MER` selbst: Lader, Überlagerungen, Rampe für RUN, Fernteil der RAM-Disk |
+| `$EE:0000–$EF:C0FF` | HORIZONT rettet Grafik, Textschirm, Bank 3, Sprites und Register |
+| `$F0`, `$F1` | die Einträge der linken und rechten Liste |
+| `$F2:0000–$F7:FFFF` | VIEW: Zeilentabelle, MER-Bytes an ihrer 16-Bit-Adresse, Befehlstabelle |
+
+BASIC (`$2000–$47FF` und Bank 1) und SONG (`$B480–$B7FF`) bleiben unberührt;
+ein Song spielt weiter, solange ATLAS nicht kopiert. Ohne SDRAM-Modul läuft
+ATLAS nicht.
+
+**Netzdienst für ATLAS:** Art 5 mit Byte 17 = 1 liefert eine MER-Datei roh
+(mit Kopf), Art 9 benennt um (alt 8.3 in Byte 0–10, neu in 18–28), Art 10
+meldet eine Datei der Browser-Seite (SEND), Art 11 holt eine Datei aus dem
+Netz nach `files` (Adresse ab Byte 0, http/https). Art 12 spielt einen
+Internetradio-Sender (Adresse im Text, MP3 über http/https;
+`tools/radio_dienst.py`, dekodiert mit `mpg123`), Art 13 hält an. Der
+Dienst legt 8-Bit-Samples mit 22 050 Hz in zwei Ringe im Fenster (links ab
+`$8000`, rechts ab `$C000`, je 16 KB) und meldet ab `$80`: `+0` Zustand
+(0 aus, 1 verbindet, 2 spielt, 3 Fehler), `+1` Zähler (ändert sich mit Titel
+und Zustand), `+2` Schreibzeiger, `+4` Lesezeiger (schreibt die App),
+`+6` kbit/s, `+8` laufender Titel, `+$40` Name des Senders oder Fehlertext. Dazu
+(`tools/radio_bild.py`): ab `$0400` das Spektrum, 64 Felder zu 16 Bändern
+(Stufe 0–15), je ein Feld für einen Block von 256 Samples im Ring; ab `$0800`
+das Cover (`+0` Zähler, `+1` Art 0 keins / 1 Cover / 2 Senderbild, `+$10`
+32 Paletteneinträge im Format von PINSEL) und ab `$1000` seine 48 × 48
+Punkte mit den Werten 64–95. Das Cover sucht der Dienst zum laufenden Titel
+bei iTunes (freie Suche; der Titel geht dafür an Apple) und holt es als PNG;
+findet er nichts, zeichnet er ein Senderbild. Die Browser-Ablage
+(`tools/ablage_seite.py`, Port 816, nur Heimnetz) schreibt ihren Stand nach
+`$FD:0040`:
+
+| | |
+|---|---|
+| `+0` | 0 nichts, 1 empfängt gerade, 2 eben fertig, 3 fehlgeschlagen |
+| `+1` | Zähler: ändert sich mit dem Ordner `files` (auch per SMB, FTP, scp) |
+| `+2` | Nummer der Übertragung |
+| `+4`, `+8` | Bytes bisher, Gesamtgröße (je 32 Bit) |
+| `+12`, `+25` | Name am MERIDIAN (8.3), Absender (je mit 0 dahinter) |
+| `+42` | Adresse der Seite, z. B. `192.168.178.92:816` |
+
+| Taste | in ATLAS |
+|---|---|
+| ↑ ↓ Bild↑ Bild↓ Pos1 Ende | Balken bewegen |
+| Tab | andere Liste |
+| 0 1 2 3 4 | Laufwerk der aktiven Liste (4: RAM-Disk) |
+| A–Z | zum nächsten Namen mit diesem Buchstaben |
+| Leertaste / + / − | markieren / alle / keine |
+| Return | RUN (BASIC, MER, Song; beim Song ein zweites Mal: anhalten) |
+| F2 F3 F5 F6 F8 | RENAME, VIEW, COPY, MOVE, DELETE |
+| F10 | Menüs (Net: SEND, Download from URL, Adresse der Browser-Seite; Drive: Speicherstand des Moduls sichern und zurückspielen) |
+| Esc | zurück ins BASIC (kommt gerade etwas an: erst fragen) |
+| Maus | Klick: Balken, Doppelklick: RUN, rechts: markieren, Rad: rollen; Menüs und Knöpfe |
+
+In VIEW: ↑ ↓ Bild↑ Bild↓ Pos1 Ende blättern, ← → schieben, Esc schließt.
+
+### Der Schreibtisch: Modul HORIZONT.MOD
+
+Mit dem Modul `HORIZONT.MOD` (im Repo `extras/`) (MiSTer-Menü „Insert cartridge“, seit
+dem 10.10.2026 `FSC2`: der MiSTer merkt sich die Wahl in `MERIDIAN.f2` und
+steckt das Modul bei jedem Core-Start selbst ein; „Remove“ im Dateidialog
+nimmt es heraus) startet der MERIDIAN gleich auf dem **Schreibtisch** von
+HORIZONT. „Cartridge start: Off“ startet weiter das blanke BASIC, Esc oder
+das Symbol BASIC führen vom Schreibtisch dorthin, ein Reset zurück.
+
+| Wo | Was (solange der Schreibtisch läuft) |
+|---|---|
+| `$00:2000–$47FF` | der Schreibtisch (BASIC kopiert seinen Code bei jedem Start neu dorthin) |
+| `$00:5000–$7FFF` | HORIZONT |
+| `$00:8000–$B3FF` | die laufende App |
+| `$12:0000` | Zwischenlager: BASIC-Programme vor dem Schreiben auf Laufwerk 0, Apps von Diskette und aus ATLAS (Rückgabe 4), Bilder von PICTURES (bis 2 MB) |
+| `$40:0000–` | das Modul: Starter, Katalog, Symbole, Programme (ROM, schreibgeschützt) |
+| Laufwerk 0 | Speicherstand des Moduls, beim ersten BASIC-Programm oder der ersten Einstellung als FAT16 eingerichtet (8 MB, ein Sektor je Cluster); `HORIZONT.CFG` merkt Look und Effekte |
+
+Unten die Leiste mit den Programmen des Moduls: ATLAS, WORKSHOP, TAKTSTOCK,
+BASIC, GLOWMINE, CLOCK, NOTES, RADIO, darüber eine zweite Reihe für die
+Programme 9–16, heute PICTURES (BMP mit 4 und 8 Bit auf Ebene A) und SID JAM; ein Klick
+startet, auch Menü *Programs*. RADIO spielt Internetradio über den Netzdienst: Ein
+Interrupt-Haken füllt aus den Ringen im Fenster zwei Sample-Schleifen
+(`$E8:0000` links, `$E8:8000` rechts, je 32 KB), die ORGEL auf den
+Samplekanälen 6 und 7 endlos spielt.
+**SID JAM** (Oktober 2026) ist eine SID-Jukebox:
+allein mit der HVSC oder gemeinsam mit allen Hörern im Takt eines Servers,
+mit Chat, Wünschen, Abstimmung und Sternen. Der Netzdienst (Art 20,
+`sidjam/dienst/`) lässt `sidkern` (6502 mit C64-Umgebung) laufen und rechnet
+den Ton mit reSID (`sidjam/ton/sidton`) – zwei Samplekanäle zusammen, das obere
+Byte mit LAUT 63 auf Kanal 6, der Rest mit LAUT 1 auf Kanal 7, gut 14 Bit.
+Daneben schreibt ein Timer-A-Interrupt die SID-Zugriffe, für die ORGEL
+umgerechnet, auf die Mikrosekunde genau in die ORGEL: stumm für die
+Stimmen-Ansicht oder hörbar als Klang „ORGEL“. Fenster, Befehle und
+Server-API: `sidjam/SCHNITTSTELLEN.md`. Im Programm laufen auch
+TAKTSTOCK-Songs (Art „musik“): einmal auf dem MERIDIAN aufgenommen, als MP3
+in `EIGENE/`, gespielt wie der
+Original-Klang.
+**Netz-Jam** (TAKTSTOCK, Oktober 2026): mehrere TAKTSTOCK an einem Song über
+den SID-JAM-Server (`/api/sidjam/tak/`). TAKTSTOCK vergleicht den Song jedes
+Bild ein Stück mit einer Schattenkopie (`$F1:0000`) und schickt jede
+geänderte Stelle als „Versatz, Maske, 4 Bytes“ durch einen Ring im
+DRAHT-Fenster (Art 21); was die anderen ändern, kommt durch einen zweiten
+Ring zurück. Der Code liegt als eigenes Modul in Bank `$ED`, die Cursor der anderen sind Kobolde
+24–31.
+Apps (`.APP`) kopiert der Schreibtisch an ihre Adresse und ruft sie per JSL;
+sie rufen `HZ_NEU` und kehren mit RTL zurück. MER-Programme (TAKTSTOCK)
+startet er wie ein Fernstart; ihr RTL landet im Modul, das Bibliothek und
+Schreibtisch neu kopiert. BASIC-Programme und Cartridges (GLOWMINE) schreibt
+er auf Laufwerk 0 und lässt BASIC sie mit `LOAD"NAME",0` und `RUN` laden.
+*Open app …* startet `.APP`-Dateien von den Laufwerken 1–3, ATLAS mit RUN
+von jedem Laufwerk.
+
 ## Werkzeuge
 
 | Aufgabe | Befehl |
@@ -1378,6 +1507,7 @@ von Pfeilen und Leertaste käme es nie an.
 | Joystick 1 in der Simulation halten | `MERIDIAN_JOY="bild:wert;…" ./obj_dir/meridian_sim …` (ab Bild gilt wert, Bits wie `JOY(1)`) |
 | Cartridge am Mac prüfen (Abschnitte, Bilder) | `python3 tools/cartridge.py liste SPIEL.BAS [--disk BILD.DSK]` · `../.venv/bin/python tools/cartridge.py bilder SPIEL.BAS ordner/` |
 | GLOWMINE bauen (Daten, Programm, Cartridge) | `python3 programme/glowmine.py [--bilder ordner]` → `programme/glowmine.bas`, `programme/daten/glowmine.mws` |
+| Dateien vom Mac in Laufwerk 3 (Browser-Ablage des Netzdienstes) | im Browser `http://mister:816/` (Net ▸ Browser page in ATLAS nennt die Adresse) · `python3 tools/ablage.py mister DATEI…` · `--liste` · `--holen NAME [ziel]` · `--weg NAME` |
 | GLOWMINE durchspielen lassen (Nachbau der Spiellogik, geplanter Weg) | `python3 programme/glowmine_durchlauf.py` · Testfassung mit Eingaben aus DATA: `--test GMTEST.BAS --disk BILD.DSK`, im Simulator `LOAD "GMTEST"`, `RUN`, `MERIDIAN_JOY="300:16;310:0"` |
 
 ## Etappen

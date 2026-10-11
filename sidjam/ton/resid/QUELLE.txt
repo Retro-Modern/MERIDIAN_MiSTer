@@ -1,0 +1,2 @@
+3bf8eff22bc81743d2d5fa089eaf2414bf3ed6e4 Mon Aug 11 13:02:24 2025 +0000
+https://github.com/libsidplayfp/resid (unveraendert bis auf siddefs.h aus siddefs.h.in)
