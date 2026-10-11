@@ -1368,21 +1368,21 @@ ATLAS nicht.
 (mit Kopf), Art 9 benennt um (alt 8.3 in Byte 0–10, neu in 18–28), Art 10
 meldet eine Datei der Browser-Seite (SEND), Art 11 holt eine Datei aus dem
 Netz nach `files` (Adresse ab Byte 0, http/https). Art 12 spielt einen
-Internetradio-Sender (Adresse im Text, MP3 über http/https;
-`tools/radio_dienst.py`, dekodiert mit `mpg123`), Art 13 hält an. Der
+Internetradio-Sender (Adresse im Text, MP3 über http/https,
+dekodiert mit `mpg123`), Art 13 hält an. Der
 Dienst legt 8-Bit-Samples mit 22 050 Hz in zwei Ringe im Fenster (links ab
 `$8000`, rechts ab `$C000`, je 16 KB) und meldet ab `$80`: `+0` Zustand
 (0 aus, 1 verbindet, 2 spielt, 3 Fehler), `+1` Zähler (ändert sich mit Titel
 und Zustand), `+2` Schreibzeiger, `+4` Lesezeiger (schreibt die App),
-`+6` kbit/s, `+8` laufender Titel, `+$40` Name des Senders oder Fehlertext. Dazu
-(`tools/radio_bild.py`): ab `$0400` das Spektrum, 64 Felder zu 16 Bändern
+`+6` kbit/s, `+8` laufender Titel, `+$40` Name des Senders oder Fehlertext. Dazu:
+ab `$0400` das Spektrum, 64 Felder zu 16 Bändern
 (Stufe 0–15), je ein Feld für einen Block von 256 Samples im Ring; ab `$0800`
 das Cover (`+0` Zähler, `+1` Art 0 keins / 1 Cover / 2 Senderbild, `+$10`
 32 Paletteneinträge im Format von PINSEL) und ab `$1000` seine 48 × 48
 Punkte mit den Werten 64–95. Das Cover sucht der Dienst zum laufenden Titel
 bei iTunes (freie Suche; der Titel geht dafür an Apple) und holt es als PNG;
 findet er nichts, zeichnet er ein Senderbild. Die Browser-Ablage
-(`tools/ablage_seite.py`, Port 816, nur Heimnetz) schreibt ihren Stand nach
+(Port 816, nur Heimnetz) schreibt ihren Stand nach
 `$FD:0040`:
 
 | | |
@@ -1411,7 +1411,7 @@ In VIEW: ↑ ↓ Bild↑ Bild↓ Pos1 Ende blättern, ← → schieben, Esc schl
 
 ### Der Schreibtisch: Modul HORIZONT.MOD
 
-Mit dem Modul `HORIZONT.MOD` (im Repo `extras/`) (MiSTer-Menü „Insert cartridge“, seit
+Mit dem Modul `HORIZONT.MOD` (Download auf retro-modern.net) (MiSTer-Menü „Insert cartridge“, seit
 dem 10.10.2026 `FSC2`: der MiSTer merkt sich die Wahl in `MERIDIAN.f2` und
 steckt das Modul bei jedem Core-Start selbst ein; „Remove“ im Dateidialog
 nimmt es heraus) startet der MERIDIAN gleich auf dem **Schreibtisch** von
@@ -1436,14 +1436,13 @@ Interrupt-Haken füllt aus den Ringen im Fenster zwei Sample-Schleifen
 Samplekanälen 6 und 7 endlos spielt.
 **SID JAM** (Oktober 2026) ist eine SID-Jukebox:
 allein mit der HVSC oder gemeinsam mit allen Hörern im Takt eines Servers,
-mit Chat, Wünschen, Abstimmung und Sternen. Der Netzdienst (Art 20,
-`sidjam/dienst/`) lässt `sidkern` (6502 mit C64-Umgebung) laufen und rechnet
-den Ton mit reSID (`sidjam/ton/sidton`) – zwei Samplekanäle zusammen, das obere
+mit Chat, Wünschen, Abstimmung und Sternen. Der Netzdienst (Art 20)
+lässt `sidkern` (6502 mit C64-Umgebung) laufen und rechnet
+den Ton mit reSID (`sidton`) – zwei Samplekanäle zusammen, das obere
 Byte mit LAUT 63 auf Kanal 6, der Rest mit LAUT 1 auf Kanal 7, gut 14 Bit.
 Daneben schreibt ein Timer-A-Interrupt die SID-Zugriffe, für die ORGEL
 umgerechnet, auf die Mikrosekunde genau in die ORGEL: stumm für die
-Stimmen-Ansicht oder hörbar als Klang „ORGEL“. Fenster, Befehle und
-Server-API: `sidjam/SCHNITTSTELLEN.md`. Im Programm laufen auch
+Stimmen-Ansicht oder hörbar als Klang „ORGEL“. Im Programm laufen auch
 TAKTSTOCK-Songs (Art „musik“): einmal auf dem MERIDIAN aufgenommen, als MP3
 in `EIGENE/`, gespielt wie der
 Original-Klang.
@@ -1507,7 +1506,6 @@ von jedem Laufwerk.
 | Joystick 1 in der Simulation halten | `MERIDIAN_JOY="bild:wert;…" ./obj_dir/meridian_sim …` (ab Bild gilt wert, Bits wie `JOY(1)`) |
 | Cartridge am Mac prüfen (Abschnitte, Bilder) | `python3 tools/cartridge.py liste SPIEL.BAS [--disk BILD.DSK]` · `../.venv/bin/python tools/cartridge.py bilder SPIEL.BAS ordner/` |
 | GLOWMINE bauen (Daten, Programm, Cartridge) | `python3 programme/glowmine.py [--bilder ordner]` → `programme/glowmine.bas`, `programme/daten/glowmine.mws` |
-| Dateien vom Mac in Laufwerk 3 (Browser-Ablage des Netzdienstes) | im Browser `http://mister:816/` (Net ▸ Browser page in ATLAS nennt die Adresse) · `python3 tools/ablage.py mister DATEI…` · `--liste` · `--holen NAME [ziel]` · `--weg NAME` |
 | GLOWMINE durchspielen lassen (Nachbau der Spiellogik, geplanter Weg) | `python3 programme/glowmine_durchlauf.py` · Testfassung mit Eingaben aus DATA: `--test GMTEST.BAS --disk BILD.DSK`, im Simulator `LOAD "GMTEST"`, `RUN`, `MERIDIAN_JOY="300:16;310:0"` |
 
 ## Etappen

@@ -47,8 +47,8 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 2. Optional: unzip `extras/MERIDIAN_disks.zip` into
    `/media/fat/games/MERIDIAN/`. It holds the demo disk `MERIDIAN.DSK`, two
    blank disks and the test cartridge `COUNTER.MOD`. The mining game
-   `extras/TIEFGANG.MOD` and the desktop `extras/HORIZONT.MOD` go into the
-   same folder (see below).
+   `extras/TIEFGANG.MOD` goes into the same folder (see below). The desktop
+   [HORIZONT](#the-horizont-desktop) is a download on retro-modern.net.
 3. Start the core. It boots into BASIC with *47102 BYTES FREE*.
 4. Insert a disk in the OSD under *Drive 1*. Then `DIR`, `LOAD "STARFALL"`,
    `RUN`.
@@ -145,14 +145,14 @@ CPU, copies the data by DMA and starts the program through an NMI.
 `tools/draht.py` is a small Python service for the MiSTer's Linux side. It
 answers the BASIC `NET` commands through a shared window in the DDR3 memory,
 and it serves the folder `/media/fat/games/MERIDIAN/files` as **drive 3**.
-It also does the network parts of the [HORIZONT desktop](#the-horizont-desktop)
-(RADIO, SID JAM, ATLAS's browser page and downloads, TAKTSTOCK's net jam) and
-the TIEFGANG ranking. To install it:
+It also serves the TIEFGANG ranking. To install it:
 
-1. Unzip `extras/MERIDIAN_network.zip` into the root of the SD card
-   (`/media/fat/`). It puts the service into `linux/meridian/` and the song
-   index for SID JAM into `games/MERIDIAN/HVSC/`. (For `NET` and drive 3
-   alone, `tools/draht.py` and `tools/disk.py` are enough.)
+1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
+   For the network parts of the [HORIZONT desktop](#the-horizont-desktop)
+   (RADIO, SID JAM, ATLAS's browser page, TAKTSTOCK's net jam) take the full
+   network service package from
+   [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html)
+   instead – unzip it into the root of the SD card.
 2. Add these lines to `/media/fat/linux/user-startup.sh`:
 
 ```sh
@@ -428,49 +428,14 @@ one click starts a program.
 | PICTURES | shows BMP files (4 and 8 bits per pixel) from drives 1–3 |
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 
-![ATLAS, the file manager](Screens/ATLAS.png)
+HORIZONT needs the SDRAM module and the core from release 20261010 on.
 
-**Install:** copy `extras/HORIZONT.MOD` to `/media/fat/games/MERIDIAN/` and
-choose it in the OSD under *Insert cartridge*. The MiSTer inserts it again at
-every core start; with *Cartridge start: Off* the core boots into BASIC as
-before. HORIZONT needs the SDRAM module. RADIO, SID JAM, the net jam and the
-network parts of ATLAS need the network service (see
-[Network and folder drive](#network-and-folder-drive-optional)); everything
-else works without it. The desktop keeps its settings (look, effects) on
-drive 0, the cartridge's save memory. *View* switches the look.
-
-**SID JAM** plays C64 music from the High Voltage SID Collection. The sound
-is reSID, running on the MiSTer's ARM (`sidjam/ton`), and the app shows every
-voice live with note, waveform, envelope and pulse width. *Together*, everyone
-hears the same tune at the same time, with chat, wishes, a vote on the next
-tune, skip and stars – in the browser, too, at
-[retro-modern.net/en/jam.html](https://retro-modern.net/en/jam.html). To chat
-and vote, link the MERIDIAN to a forum account: `F8` in the app shows a code,
-enter it on that page. *Solo* plays your own copy of the HVSC: get it from
-[hvsc.c64.org](https://www.hvsc.c64.org), zip its folder `C64Music` into one
-file and put it at `games/MERIDIAN/HVSC/hvsc.zip` – one file, because exFAT
-turns 60,000 small files into gigabytes. The index for HVSC #85 comes with the
-network package.
-
-![SID JAM on the MiSTer](Screens/SIDJAM.png)
-
-**RADIO** plays MP3 streams through the network service (decoded by `mpg123`
-on the MiSTer). Some stations are built in – C64 remixes, demoscene radio,
-SomaFM and more; your own go into `games/MERIDIAN/files/RADIO.TXT`, one per
-line as `Name|http://address`. For the cover art the service looks up the
-current title at iTunes, so the title goes to Apple.
-
-![RADIO with cover art and spectrum](Screens/RADIO.png)
-
-**TAKTSTOCK** has its help on `F10`. The net jam (`Ctrl+J`) runs over
-retro-modern.net: open a room, and the others join with its four-character
-code; everyone edits everywhere, `Ctrl+Return` plays for all. Your name comes
-from the SID JAM link (`F8` in SID JAM), otherwise you are a guest.
-
-![TAKTSTOCK](Screens/TAKTSTOCK.png)
-
-More pictures and the story behind it:
-[retro-modern.net/en/meridian.html#horizont](https://retro-modern.net/en/meridian.html#horizont).
+**Download and setup:** the cartridge `HORIZONT.MOD` and the network service
+package for RADIO, SID JAM and the net jam are on
+[retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html).
+Pictures and setup: [retro-modern.net/en/meridian.html#horizont](https://retro-modern.net/en/meridian.html#horizont).
+SID JAM also plays in the browser:
+[retro-modern.net/en/jam.html](https://retro-modern.net/en/jam.html).
 
 ## Building
 
@@ -491,11 +456,6 @@ More pictures and the story behind it:
   which `rom/bauen.sh` writes), `tools/cartridge.py` builds and checks
   workshop cartridges, and `tools/disk.py` creates and fills FAT16 disk
   images on a PC or Mac.
-- **SID JAM on the MiSTer:** `sidjam/kern/bauen.sh arm` builds `sidkern`
-  (a 6510 with a C64 around it that writes the SID accesses as a stream),
-  `sidjam/ton/bauen.sh arm` builds `sidton` (that stream through reSID), both
-  static for ARMv7 with [zig](https://ziglang.org/). Interfaces:
-  `sidjam/SCHNITTSTELLEN.md`.
 
 Source comments, scripts and the documentation are in German.
 
@@ -522,10 +482,7 @@ the forum at [forum.retro-modern.net](https://forum.retro-modern.net), category
 - **TIEFGANG** (`extras/TIEFGANG.MOD`): © 2026
   [retro-modern.net](https://retro-modern.net). Free to play and to pass on
   unchanged; its source is not part of this repository.
-- **HORIZONT** and its programs (`extras/HORIZONT.MOD`, with TAKTSTOCK):
-  © 2026 [retro-modern.net](https://retro-modern.net). Free to use and to
-  pass on unchanged; their source is not part of this repository.
-- **reSID** (`sidjam/ton/resid/`, in `sidton` for SID JAM): © Dag Lem,
-  GPL-2.0-or-later.
-- **HVSC:** not included. The song index in `MERIDIAN_network.zip` is made
-  from the song lengths and STIL of HVSC #85.
+- **HORIZONT** and its programs, TAKTSTOCK included (a download on
+  [retro-modern.net](https://retro-modern.net/en/downloads.html)): © 2026
+  retro-modern.net. Free to use and to pass on unchanged; their source is not
+  part of this repository.
