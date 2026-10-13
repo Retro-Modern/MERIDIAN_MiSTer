@@ -36,7 +36,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
 | Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card as drive 3 |
 | Network (DRAHT) | TCP, HTTP(S), file download and disk creation from BASIC, served by a small Python service on the MiSTer |
-| Desktop (HORIZONT) | a graphical desktop on a cartridge: file manager, tracker, internet radio, SID jukebox, picture viewer and more ([see below](#the-horizont-desktop)) |
+| Desktop (HORIZONT) | a graphical desktop on a cartridge: file manager, tracker, internet radio, SID jukebox, weather, picture viewer and more ([see below](#the-horizont-desktop)) |
 | Workshop | built-in tools like on the Pico-8: sprite, tile, map, sound, palette and font editors, one key away from BASIC (F1–F6); a game and all its data are saved as one file |
 | Video | 15.7 kHz, NTSC 60 Hz or PAL 50 Hz |
 
@@ -149,7 +149,7 @@ It also serves the TIEFGANG ranking. To install it:
 
 1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
    For the network parts of the [HORIZONT desktop](#the-horizont-desktop)
-   (RADIO, SID JAM, ATLAS's browser page, TAKTSTOCK's net jam) take the full
+   (RADIO, SID JAM, WEATHER, ATLAS's browser page, TAKTSTOCK's net jam) take the full
    network service package from
    [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html)
    instead – unzip it into the root of the SD card.
@@ -427,11 +427,12 @@ one click starts a program.
 | RADIO | internet radio: MP3 streams over http/https, with cover art and a spectrum |
 | PICTURES | shows BMP files (4 and 8 bits per pixel) from drives 1–3 |
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
+| WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
 
 HORIZONT needs the SDRAM module and the core from release 20261010 on.
 
 **Download and setup:** the cartridge `HORIZONT.MOD` and the network service
-package for RADIO, SID JAM and the net jam are on
+package for RADIO, SID JAM, WEATHER and the net jam are on
 [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html).
 Pictures and setup: [retro-modern.net/en/meridian.html#horizont](https://retro-modern.net/en/meridian.html#horizont).
 SID JAM also plays in the browser:

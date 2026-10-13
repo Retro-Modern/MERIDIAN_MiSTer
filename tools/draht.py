@@ -37,6 +37,8 @@ zwei Ringen ab $8000 (links) und $C000 (rechts).
 SID JAM (App JAM, sidjam_dienst.py): Art 20 mit einem Befehl als Text; Stand
 ab $2000, Auftraege fuer die ORGEL im Ring ab $4000, Samples wie beim Radio
 (Tabelle: sidjam/SCHNITTSTELLEN.md).
+Wetter (App WEATHER, wetter_dienst.py): Art 14 mit einem Befehl als Text;
+die Kurzform fuer die Menueleiste von HORIZONT schreibt der Dienst ab $22.
 TAKTSTOCK Netz-Jam (takjam_dienst.py): Art 21 mit einem Befehl als Text; Stand
 ab $0300, Aenderungen in zwei Ringen ab $0400 und $0800 (taktstock/netz/NETZJAM.md).
 RADIO und SID JAM schreiben nur durch ein Tor ins Fenster (Klasse Tor): Es
@@ -74,6 +76,10 @@ try:
     import radio_dienst
 except ImportError:                     # das Radio auch nicht
     radio_dienst = None
+try:
+    import wetter_dienst                # Wetter (App WEATHER, Menueleiste)
+except ImportError:
+    wetter_dienst = None
 try:
     import sidjam_dienst                # SID JAM (sidjam/dienst/)
 except ImportError:
@@ -221,6 +227,7 @@ class Dienst:
         self.radio = None               # Internetradio (radio_dienst), beim ersten Sender
         self.jam = None                 # SID JAM (sidjam_dienst), beim ersten Befehl
         self.takjam = None              # TAKTSTOCK Netz-Jam (takjam_dienst), beim ersten Befehl
+        self.wetter = wetter_dienst.Wetter(fenster, zu_meridian, ordner) if wetter_dienst else None
         self.tor_radio = Tor(fenster)
         self.tor_jam = Tor(fenster)
         self.leben = {}                 # Adresse -> (Wert, seit wann, schon gezaehlt)
@@ -247,6 +254,8 @@ class Dienst:
             self.m[ANTW] = self.m[ANR]              # im Fenster gelten als erledigt
             self.status = 0
             self.meldungen.clear()
+            if self.wetter:
+                self.wetter.kurz_alt = None             # Kurzform neu schreiben
             print("MERIDIAN laeuft", flush=True)
         if not aktiv and self.aktiv is not False:
             self.radio_halten(still=True)           # nichts mehr ins Fenster
@@ -310,6 +319,14 @@ class Dienst:
                 status, antwort = -1, zu_meridian("ERROR: " + str(e))
             if art == 13:
                 self.tor_radio.zu()
+            self.antworten(nr, status, antwort)
+        elif art == 14:                             # Wetter (App WEATHER)
+            if not self.wetter:
+                return self.antworten(nr, -6, b"NO WEATHER")
+            try:
+                status, antwort = self.wetter.anfrage(text)
+            except Exception as e:
+                status, antwort = 2, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
         elif art == 20:
             if not sidjam_dienst:
@@ -753,6 +770,8 @@ def main():
         d.anfrage()
         d.bedienen()
         d.wachen()
+        if d.wetter:
+            d.wetter.pflegen()
         time.sleep(0.001)
 
 
