@@ -149,7 +149,7 @@ It also serves the TIEFGANG ranking. To install it:
 
 1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
    For the network parts of the [HORIZONT desktop](#the-horizont-desktop)
-   (RADIO, SID JAM, WEATHER, ATLAS's browser page, TAKTSTOCK's net jam) take the full
+   (RADIO, SID JAM, WEATHER, NEWS, ATLAS's browser page, TAKTSTOCK's net jam) take the full
    network service package from
    [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html)
    instead – unzip it into the root of the SD card.
@@ -411,7 +411,9 @@ the ORGEL's filter and echo, two TAKTSTOCK songs play from expansion RAM.
 HORIZONT is a graphical desktop for the MERIDIAN on a cartridge: a menu bar,
 windows, lists and buttons, the mouse, and the PINSEL look – shine, ink
 shadows and an evening sky. Plug it in and the MERIDIAN starts on the desktop;
-one click starts a program.
+one click starts a program. Since version 2.0 up to four programs run at the
+same time, each in its own window (`Ctrl+Tab` switches); RADIO and SID JAM keep
+playing in the background.
 
 ![The HORIZONT desktop](Screens/HORIZONT.png)
 
@@ -428,11 +430,12 @@ one click starts a program.
 | PICTURES | shows BMP files (4 and 8 bits per pixel) from drives 1–3 |
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 | WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
+| NEWS | news from tagesschau.de, heise online and the Retro-Modern forum, with the full article |
 
 HORIZONT needs the SDRAM module and the core from release 20261010 on.
 
 **Download and setup:** the cartridge `HORIZONT.MOD` and the network service
-package for RADIO, SID JAM, WEATHER and the net jam are on
+package for RADIO, SID JAM, WEATHER, NEWS and the net jam are on
 [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html).
 Pictures and setup: [retro-modern.net/en/meridian.html#horizont](https://retro-modern.net/en/meridian.html#horizont).
 SID JAM also plays in the browser:

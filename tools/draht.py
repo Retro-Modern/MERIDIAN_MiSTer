@@ -37,6 +37,8 @@ zwei Ringen ab $8000 (links) und $C000 (rechts).
 SID JAM (App JAM, sidjam_dienst.py): Art 20 mit einem Befehl als Text; Stand
 ab $2000, Auftraege fuer die ORGEL im Ring ab $4000, Samples wie beim Radio
 (Tabelle: sidjam/SCHNITTSTELLEN.md).
+Nachrichten (App NEWS, nachrichten_dienst.py): Art 15 mit einem Befehl als
+Text (Tagesschau, heise online, Retro-Modern-Forum).
 Wetter (App WEATHER, wetter_dienst.py): Art 14 mit einem Befehl als Text;
 die Kurzform fuer die Menueleiste von HORIZONT schreibt der Dienst ab $22.
 TAKTSTOCK Netz-Jam (takjam_dienst.py): Art 21 mit einem Befehl als Text; Stand
@@ -77,6 +79,10 @@ try:
 except ImportError:                     # das Radio auch nicht
     radio_dienst = None
 try:
+    import nachrichten_dienst           # Nachrichten (App NEWS)
+except ImportError:
+    nachrichten_dienst = None
+try:
     import wetter_dienst                # Wetter (App WEATHER, Menueleiste)
 except ImportError:
     wetter_dienst = None
@@ -106,7 +112,7 @@ D_GUT, D_UNGUELTIG, D_FEHLT, D_VOLL, D_SCHUTZ = 0, 1, 2, 3, 6
 
 # Typografische Zeichen, die oft vorkommen
 ERSATZ = {"\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201c": '"', "\u201d": '"',
-          "\u201e": '"', "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u00a0": " "}
+          "\u201e": '"', "\u2013": "-", "\u2014": "-", "\u2026": "...", "\u00a0": " ", "\u00b7": "-"}
 
 
 def zu_meridian(s):
@@ -228,6 +234,7 @@ class Dienst:
         self.jam = None                 # SID JAM (sidjam_dienst), beim ersten Befehl
         self.takjam = None              # TAKTSTOCK Netz-Jam (takjam_dienst), beim ersten Befehl
         self.wetter = wetter_dienst.Wetter(fenster, zu_meridian, ordner) if wetter_dienst else None
+        self.nachrichten = nachrichten_dienst.Nachrichten(zu_meridian) if nachrichten_dienst else None
         self.tor_radio = Tor(fenster)
         self.tor_jam = Tor(fenster)
         self.leben = {}                 # Adresse -> (Wert, seit wann, schon gezaehlt)
@@ -325,6 +332,14 @@ class Dienst:
                 return self.antworten(nr, -6, b"NO WEATHER")
             try:
                 status, antwort = self.wetter.anfrage(text)
+            except Exception as e:
+                status, antwort = 2, zu_meridian("ERROR: " + str(e))
+            self.antworten(nr, status, antwort)
+        elif art == 15:                             # Nachrichten (App NEWS)
+            if not self.nachrichten:
+                return self.antworten(nr, -6, b"NO NEWS")
+            try:
+                status, antwort = self.nachrichten.anfrage(text)
             except Exception as e:
                 status, antwort = 2, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
