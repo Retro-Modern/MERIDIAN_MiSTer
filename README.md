@@ -431,6 +431,9 @@ playing in the background.
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 | WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
 | NEWS | news from tagesschau.de, heise online and the Retro-Modern forum, with the full article |
+| SETTINGS | background (sunset, starry night, a colour or your own BMP), pointer speed and left-handed buttons, screen saver (star flight or test card), 12 or 24 hour clock |
+| MINES | Minesweeper in three sizes up to 30 × 16 fields |
+| SOLITAIRE | Klondike solitaire with drag and drop |
 
 HORIZONT needs the SDRAM module and the core from release 20261010 on.
 
