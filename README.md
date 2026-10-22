@@ -399,7 +399,10 @@ see the [privacy notice](https://retro-modern.net/en/privacy.html).
 **Install:** copy `extras/TIEFGANG.MOD` to `/media/fat/games/MERIDIAN/` and
 choose it in the OSD under *Insert cartridge*. It starts at every core start
 (OSD *Cartridge start*); `Esc` on the title goes to BASIC. The save lives in
-the cartridge's own save memory.
+the cartridge's own save memory. The version is shown at the bottom of the
+title – 1.1 (22 October 2026) fixes music that went badly out of tune when
+the cartridge was inserted after BASIC had run, or after a reset from the
+OSD; just replace the old `TIEFGANG.MOD`.
 
 **Keys** (joystick in brackets): arrows walk, up or `X` jumps (B) – in the
 air against a wall once more: wall jump; space digs (A), with down/up below
