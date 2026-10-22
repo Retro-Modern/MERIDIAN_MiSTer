@@ -24,6 +24,7 @@
 ;============================================================================
 
 DOS_RUF   = $FF4000
+DATA_RUF  = $FF401B              ; Sprites als DATA-Zeilen
 DO_LW     = $16C0               ; Parameterblock des DOS (Bank 0)
 DO_MER    = $16C2
 DO_ENDUNG = $16C3
@@ -34,13 +35,15 @@ DO_STD_LW = $16FF               ; DRIVE
 SD_NAME_MAX = 12
 
 	.virtual W_RAM+$40          ; nur waehrend eines Besuchs (ws_start setzt sie)
-sd_modus  .byte ?               ; 0 sichern, 1 holen
+sd_modus  .byte ?               ; 0 sichern, 1 holen, 2 DATA-Zeilen
 sd_lw     .byte ?               ; Laufwerk 0-3
 sd_len    .byte ?               ; Laenge des Namens
 sd_name   .fill SD_NAME_MAX+1   ; Name, mit 0
-sd_fehler .byte ?               ; 0 gut, 1-9 DOS, $FD ohne Zusatzspeicher,
-                                ; $FE keine Sprites in der Datei, $FF keine zum Sichern
-sd_zahl   .byte ?               ; geholte Muster
+sd_fehler .byte ?               ; 0 gut, 1-9 DOS, $FA-$FC DATA-Zeilen (siehe
+                                ; rom/spritedata.asm), $FD ohne Zusatz-
+                                ; speicher, $FE keine Sprites in der Datei,
+                                ; $FF keine gemalt
+sd_zahl   .byte ?               ; geholte (DATA: geschriebene) Muster
 sd_alt    .byte ?               ; Look: Bit 1 (Zeichensatz geaendert) vorher
 sd_spr    .long ?               ; Abschnitte in der Datei (Bank 0 = keiner)
 sd_look   .long ?
@@ -56,6 +59,9 @@ sd_taste
 	cmp #'S'
 	beq +
 	iny
+	cmp #'L'
+	beq +
+	iny
 +	tya
 	sta sd_modus
 	#akku16                     ; ohne Zusatzspeicher keine Werkstatt-Daten
@@ -66,6 +72,14 @@ sd_taste
 	lda #$fd
 	sta sd_fehler
 	jmp sd_melden
++	cpy #2
+	bne +
+	ldy #sd_name                ; B: als DATA-Zeilen ins Programm (rom/spritedata.asm),
+	jsl DATA_RUF                ; die erste Zeilennummer kommt nach sd_name
+	sta sd_fehler
+	txa
+	sta sd_zahl
+	bra sd_melden
 +	jsr sd_eingabe
 	bcc +
 	jmp sp_status               ; Esc: Statuszeile wie vorher
@@ -115,9 +129,9 @@ sd_melden
 	jsr sd_zeile_leeren
 	lda sd_fehler
 	beq _gut
-	cmp #$fd
+	cmp #$fa
 	bcc +
-	sbc #$fd-9                  ; $FD-$FF -> 9-11
+	sbc #$fa-9                  ; $FA-$FF -> 9-14
 	bra ++
 +	dec a                       ; DOS 1-9 -> 0-8
 +	#akku16
@@ -138,20 +152,20 @@ _gut
 	jsr sd_name_zeigen
 	jmp sd_endung_zeigen
 _geholt
-	#text 29, 1, F_STATUS, t_sd_geholt1
-	lda sd_zahl                 ; ohne fuehrende Nullen
-	cmp #100
-	bcs _drei
-	cmp #10
-	bcs _zwei
-	jsr w_zahl1
-	bra _text
-_zwei
-	jsr w_zahl2
-	bra _text
-_drei
-	jsr w_zahl3
-_text
+	cmp #2
+	bne +
+	#text 29, 1, F_STATUS, t_sd_data1
+	jsr _zahl
+	#akku16
+	lda #<>t_sd_data2
+	ldy #`t_sd_data2
+	jsr w_text_xy
+	.as
+	lda #F_STATUS
+	jsr w_text
+	jmp sd_name_zeigen
++	#text 29, 1, F_STATUS, t_sd_geholt1
+	jsr _zahl
 	#akku16
 	lda #<>t_sd_geholt2
 	ldy #`t_sd_geholt2
@@ -160,6 +174,17 @@ _text
 	lda #F_STATUS
 	jsr w_text
 	jmp sd_name_zeigen
+_zahl
+	lda sd_zahl                 ; ohne fuehrende Nullen
+	cmp #100
+	bcs _drei
+	cmp #10
+	bcs _zwei
+	jmp w_zahl1
+_zwei
+	jmp w_zahl2
+_drei
+	jmp w_zahl3
 
 sd_zeile_leeren                 ; Zeile 29: Leerzeichen in F_STATUS
 	.as
@@ -590,7 +615,7 @@ _naechstes
 ;----------------------------------------------------------------------------
 ; Texte
 
-t_sd_hilfe     .null "S save sprites + look as NAME.SPR   L load them from a .SPR or a program"
+t_sd_hilfe     .null "S save as NAME.SPR  L load from .SPR or program  B as DATA lines in program"
 t_sd_frage_s   .null "Save sprites + look as"
 t_sd_frage_l   .null "Load sprites + look from"
 t_sd_lw        .null "drive"
@@ -598,11 +623,14 @@ t_sd_knoepfe   .null "(Tab)  Return go  Esc back"
 t_sd_gesichert .null "Saved sprites + look: "
 t_sd_geholt1   .null "Loaded "
 t_sd_geholt2   .null " patterns + look from "
+t_sd_data1     .null "Wrote "
+t_sd_data2     .null " patterns as DATA lines into the program: GOSUB "
 t_sd_endung    .null ".SPR"
 
 sd_fehlertexte
 	.word <>t_sd_f1, <>t_sd_f2, <>t_sd_f3, <>t_sd_f4, <>t_sd_f5, <>t_sd_f6
-	.word <>t_sd_f7, <>t_sd_f8, <>t_sd_f9, <>t_sd_ffd, <>t_sd_ffe, <>t_sd_fff
+	.word <>t_sd_f7, <>t_sd_f8, <>t_sd_f9, <>t_sd_ffa, <>t_sd_ffb, <>t_sd_ffc
+	.word <>t_sd_ffd, <>t_sd_ffe, <>t_sd_fff
 t_sd_f1  .null "Not possible on this drive"
 t_sd_f2  .null "File not found (a program needs its ending, e.g. GAME.BAS)"
 t_sd_f3  .null "Disk full"
@@ -612,6 +640,9 @@ t_sd_f6  .null "Disk is write-protected"
 t_sd_f7  .null "Directory full"
 t_sd_f8  .null "File too big"
 t_sd_f9  .null "Invalid name (8.3: A-Z 0-9 _ -)"
+t_sd_ffa .null "Program lines follow the old DATA lines"
+t_sd_ffb .null "No line numbers left for the DATA lines"
+t_sd_ffc .null "Not enough BASIC memory for the DATA lines"
 t_sd_ffd .null "Needs the memory expansion (SDRAM)"
 t_sd_ffe .null "No sprites in this file"
-t_sd_fff .null "No sprites to save"
+t_sd_fff .null "No sprites drawn yet"

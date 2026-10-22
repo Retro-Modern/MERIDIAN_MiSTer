@@ -34,7 +34,7 @@ the memory map ([KONZEPT.md](KONZEPT.md)) is written in German.
 | Sprites (KOBOLD) | 32 sprites of 16×16 (or 32×32 doubled), 16 colours, no per-line limit, collision detection |
 | Sound (ORGEL) | 4 synth voices (ADSR, filter) + 8 sample channels, stereo; samples play straight from chip RAM or expansion RAM, up to 16 MB each; per sample channel a bit crusher, distortion and a route through the filter; an echo/delay of up to 1 s in expansion RAM; the filter output (synth voices included) can be distorted and sent into the echo (`$C545`/`$C546`); sample level against the synths adjustable (`$C544`) |
 | Copper (LOTSE) / blitter (KRAN) | raster-synchronous register writes / copy, fill and transparent blits with job lists |
-| Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card as drive 3 |
+| Drives (TRUHE) | FAT16 disk images from the SD card, cartridges up to 4 MB, and a folder on the SD card or a USB drive as drive 3 |
 | Network (DRAHT) | TCP, HTTP(S), file download and disk creation from BASIC, served by a small Python service on the MiSTer |
 | Desktop (HORIZONT) | a graphical desktop on a cartridge: file manager, tracker, internet radio, SID jukebox, weather, picture viewer and more ([see below](#the-horizont-desktop)) |
 | Workshop | built-in tools like on the Pico-8: sprite, tile, map, sound, palette and font editors, one key away from BASIC (F1–F6); a game and all its data are saved as one file |
@@ -144,8 +144,10 @@ CPU, copies the data by DMA and starts the program through an NMI.
 
 `tools/draht.py` is a small Python service for the MiSTer's Linux side. It
 answers the BASIC `NET` commands through a shared window in the DDR3 memory,
-and it serves the folder `/media/fat/games/MERIDIAN/files` as **drive 3**.
-It also serves the TIEFGANG ranking. To install it:
+and it serves the folder `games/MERIDIAN/files` as **drive 3**. It also
+serves the TIEFGANG ranking. `games/MERIDIAN` is the folder the MiSTer
+itself uses for the core: on a USB drive (`MERIDIAN` or `games/MERIDIAN`)
+if there is one – also when plugged in later – otherwise on the SD card. To install it:
 
 1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
    For the network parts of the [HORIZONT desktop](#the-horizont-desktop)
@@ -176,9 +178,9 @@ NET "GET wttr.in/Berlin?format=3":PRINT NET$(0):PRINT NET$(0)
 
 **Drive 3** is the easy way to move files between the MERIDIAN and a
 computer: copy them into `games/MERIDIAN/files` (card reader, network share,
-FTP), and `DRIVE 3` / `DIR` shows them right away – no disk image, no
-re-inserting in the OSD. Whatever the MERIDIAN saves there is a plain file
-on the SD card. Long names appear as 8.3 aliases (`Space Debris.mod` →
+FTP, or the USB drive), and `DRIVE 3` / `DIR` shows them right away – no
+disk image, no re-inserting in the OSD. Whatever the MERIDIAN saves there
+is a plain file. Long names appear as 8.3 aliases (`Space Debris.mod` →
 `SPACED~1.MOD`; type `~` with AltGr + `+`). The service creates the folder
 when it starts.
 
@@ -293,7 +295,7 @@ driven with the mouse and a few keys; the help lines on each tab list them.
 
 | Key | Tab | |
 |---|---|---|
-| F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline; **S** saves the patterns with the look as a file, **L** loads them |
+| F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline; **S** saves the patterns with the look as a file, **L** loads them, **B** writes them as `DATA` lines into the program |
 | F2 | TILES | 256 tiles (8×8) in the same painter, previewed side by side to check that they tile. Tile 0 stays empty – empty maps are made of it |
 | F3 | MAP | two maps of 64×32 tiles. The upper part of the screen shows the maps as PINSEL draws them (the copper switches both layers to tile mode there), the lower part the tile picker |
 | F4 | SOUNDS | 64 short sounds: paint pitch and volume over 32 steps, eight waveforms, eight effects (slide, vibrato, drop, fades, arpeggios), speed and loop |
@@ -307,7 +309,16 @@ press **S** in SPRITES: it saves the 128 patterns, their banks and the look
 (palette, glow, ink) as `NAME.SPR`. **L** loads patterns and look from such
 a file or from any saved program (type the ending, e.g. `GLOWMINE.BAS`) and
 leaves the program in memory alone; `LOAD "NAME.SPR"` starts an empty
-program with those sprites. In the program, `SPRITE` uses the patterns,
+program with those sprites. A `.SPR` file holds the sprites in binary, so
+`LIST` shows nothing. To have them in the program text instead, press **B**:
+it adds the patterns as `DATA` lines at the end of the program in memory,
+with a subroutine that creates them again with `PATTERN` (from line 9000,
+or the next full thousand after the program's last line; the status line
+names the line to `GOSUB`). The subroutine starts with `RESTORE` and skips
+to its own `DATA`, so the program's other `DATA` lines don't get in the way.
+`PB(m)` then holds the palette bank of pattern m. Press **B** again after
+changing the sprites and it replaces that block.
+In the program, `SPRITE` uses the patterns,
 `MAP`/`TILE` the tiles and maps, `SFX` the sounds and `LOOK` the look and
 font:
 

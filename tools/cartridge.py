@@ -342,11 +342,16 @@ def data_zeilen(c, name, start=9000, schritt=10):
         zeilen.append(f"{nr} {text}")
         nr += schritt
     belegt = [n for n in range(128) if any(c.muster[n * 128:(n + 1) * 128])]
-    zeile(f"REM {len(belegt)} SPRITEMUSTER AUS {name.upper()} - GOSUB {start}")
-    zeile("DIM PB(127)")
+    # derselbe Kopf wie Taste B in der Werkstatt (rom/spritedata.asm) - dann
+    # ersetzt B auch einen Block von hier
+    zeile(f"REM SPRITE PATTERNS FROM THE WORKSHOP - GOSUB {start}")
+    zeile("DIM PB(127):RESTORE")
+    suche = nr
+    zeile(f'READ A$:IF A$<>"SPRITEDATA" THEN {suche}')
     schleife = nr
     zeile("READ M:IF M<0 THEN RETURN")
     zeile("READ PB(M):FOR Z=0 TO 15:READ A$:PATTERN M,Z,A$:NEXT:GOTO " + str(schleife))
+    zeile("DATA SPRITEDATA")
     for n in belegt:
         roh = c.muster[n * 128:(n + 1) * 128]
         px = []

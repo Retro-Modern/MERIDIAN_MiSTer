@@ -151,6 +151,7 @@ ldx8	.macro adr                 ; X = Byte (16 Bit, obere Haelfte 0); Akku danac
 	jmp mon_anfang              ; $FF:4012   Abzug der Register beim Einschalten
 	jmp mon_dis                 ; $FF:4015   eine Zeile disassemblieren
 	jmp mon_asm                 ; $FF:4018   eine Zeile uebersetzen
+	jmp sprite_data             ; $FF:401B Werkstatt: Sprites als DATA-Zeilen (rom/spritedata.asm)
 
 dos_befehl
 	.as
@@ -2068,5 +2069,6 @@ P_TPTR_M   = $039D
 	.include "netz.asm"
 	.include "ordner.asm"
 	.include "monitor.asm"
+	.include "spritedata.asm"
 
 	.cerror * > $8000, "DOS-ROM zu gross"

@@ -40,7 +40,7 @@ Spätere Fassungen fügen hinzu, verschieben aber nichts.
 - **Einsprünge:**
   - Kern `$00:FF80–$FF98` (JSR) und `$00:FFC1–$FFDF` (lang);
   - BASIC-Brücken ab `$00:FFA0`;
-  - System-ROM `$FF:4000–$4018`;
+  - System-ROM `$FF:4000–$401B` (`$401B` seit 22.10.2026);
   - SONG `$FF:8000–$8008`;
   - Werkstatt `$FF:C000–$C00C`.
 - **BASIC:** Die Token-Nummern bleiben; neue Wörter kommen hinten dazu.
@@ -123,7 +123,7 @@ werden. Bei 24 MHz hat sie 41,7 ns, bei 48 MHz nur 20,8 ns.
 | `$40:0000–$7F:FFFF` | Modul (ROM-Abbild, bis 4 MB); steckt eins, ist der Bereich für CPU und KRAN schreibgeschützt |
 | `$FE:0000–$FE:FFFF` | Systembank: FAT-Puffer des DOS (`$FE:0000`; ohne SDRAM-Modul `$03:FE00`), Notentexte für PLAY (`$FE:1000–$FE:13FF`), Glanzpunkte von SHINE (`$FE:1400–$FE:1450`) |
 | `$FF:0000–$FF:3FFF` | BASIC-ROM (16 KB) |
-| `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13) |
+| `$FF:4000–$FF:7FFF` | System-ROM (16 KB, bis Etappe 12 „DOS-ROM“): DOS (`JSL $FF4000`), MUSIK für PLAY (`$FF4003`, `$FF4006`), NETZ für NET (`$FF4009`), Monitor (`$FF400C`–`$FF4018`, Etappe 13), Sprites als DATA-Zeilen für die Werkstatt (`$FF401B`) |
 | `$FF:8000–$FF:BFFF` | SONG-ROM (16 KB, MERIDIAN 1.0): der Abspieler von TAKTSTOCK für BASIC `SONG` – Befehl `$FF8000`, Takt `$FF8004`, Funktion `$FF8008` (`rom/song.asm`) |
 | `$FF:C000–$FF:FFFF` | Werkstatt-ROM (16 KB, MERIDIAN 1.0): die Werkzeuge am Gerät – Start `$FFC000`, SAVE `$FFC004`, LOAD `$FFC008`, BASIC `MAP`/`TILE` `$FFC00C` (`rom/werkstatt.asm`) |
 
@@ -565,7 +565,13 @@ Sektoren mit einem Auftrag, `LEEREN` schreibt die Nullen ebenso gebündelt.
 groß, 9 Name nicht 8.3 (erlaubt: A–Z, 0–9, `_`, `-`, `~`).
 
 **Laufwerk 3 – der Ordner `files`** (Etappe 14): Der Netzdienst (DRAHT)
-stellt den Ordner `games/MERIDIAN/files` der SD-Karte als Laufwerk bereit.
+stellt den Ordner `games/MERIDIAN/files` als Laufwerk bereit.
+`games/MERIDIAN` sucht er wie Main_MiSTer (Netzdienst 1.7, 22.10.2026):
+erst auf den USB-Laufwerken `usb0`–`usb5` (`MERIDIAN` oder
+`games/MERIDIAN`), dann `network` und `cifs`, zuletzt auf der SD-Karte, und
+schaut alle 3 s nach – ein später eingestecktes oder abgezogenes Laufwerk
+zieht Laufwerk 3, die Browser-Ablage, `wetter.json` und die HVSC von SID JAM
+mit (`--ordner` legt den Ordner fest).
 Was dort liegt – per SD-Kartenleser, Netzwerkfreigabe oder FTP
 hineinkopiert –, sieht der MERIDIAN sofort, und was er sichert, ist am
 Rechner sofort nutzbar: kein Image, kein Einhängen, kein Neu-Einlegen im
@@ -1222,7 +1228,7 @@ Kacheln und Karten liegen in einer Datei. Die Werkzeuge stecken im ROM ab
 | Tasten | SPRITES und TILES | MAP |
 |---|---|---|
 | Maus | links malen/füllen, rechts Farbe aufnehmen, Klick auf Farbe oder Bogen wählt | links setzen, rechts Kachel aufnehmen, Klick in die Auswahl wählt |
-| Tasten | D zeichnen, F füllen, H/V spiegeln, R drehen, Pfeile schieben, C kopieren, P einfügen, X leeren, U zurück, 0–9 Farbe, +/− Bank, `,` `.` voriges/nächstes; nur SPRITES: S Sprites und Look als Datei sichern, L sie holen | 1/2 Karte, Pfeile rollen, H/V gespiegelt setzen, `,` `.` Kachel, X Karte leeren, U zurück |
+| Tasten | D zeichnen, F füllen, H/V spiegeln, R drehen, Pfeile schieben, C kopieren, P einfügen, X leeren, U zurück, 0–9 Farbe, +/− Bank, `,` `.` voriges/nächstes; nur SPRITES: S Sprites und Look als Datei sichern, L sie holen, B als DATA-Zeilen ins Programm | 1/2 Karte, Pfeile rollen, H/V gespiegelt setzen, `,` `.` Kachel, X Karte leeren, U zurück |
 
 SOUNDS: Maus oben Tonhöhe, darunter Lautstärke (rechts: Pause bzw. 0), Klick
 in die Zeilen WAVE und EFFECT setzt die gewählte Welle bzw. den Effekt, links
@@ -1277,8 +1283,26 @@ Speicher, Kacheln, Karten, Klänge und der Zeichensatz bleiben. Hat die
 Quelle keinen eigenen Look, gilt der Startlook. Den Namen tippt man in die
 Statuszeile (A–Z 0–9 `_` `-` `.`, ohne Endung gilt `.SPR`), Tab wechselt
 das Laufwerk (Vorgabe `DRIVE`), Return los, Esc zurück. So nutzen mehrere
-Programme dieselben Figuren, ohne sie als DATA-Zeilen mitzuschleppen
-(die gibt es am Mac: `cartridge.py data`).
+Programme dieselben Figuren, ohne sie als DATA-Zeilen mitzuschleppen.
+
+**B** schreibt die belegten Muster als DATA-Zeilen ans Ende des Programms im
+Speicher (`rom/spritedata.asm`, System-ROM `JSL $FF401B`), dasselbe wie
+`cartridge.py data` am Mac: ein Unterprogramm (REM, `DIM PB(127):RESTORE`,
+READ bis zur Kennung `DATA SPRITEDATA` – so stören eigene DATA des Programms
+davor nicht –, READ-Schleife mit `PATTERN`), je Muster eine Zeile Nummer und
+Bank und vier Zeilen mit je vier Pixelzeilen, zuletzt `DATA -1`; Schritt 10.
+Erste Zeile ist 9000 oder, reicht das Programm weiter, der nächste volle
+Tausender dahinter (GLOWMINE: 10000). Endet das Programm schon mit so einem
+Block (REM `SPRITE PATTERNS FROM THE WORKSHOP`, als letzte Zeile `DATA -1`),
+ersetzt B ihn an seiner Stelle – ändern und noch mal B geht also. Die
+Statuszeile nennt die Zeile für `GOSUB`; das Unterprogramm setzt mit
+RESTORE auch das READ des Programms zurück. Danach gilt wie nach jeder
+geänderten Zeile CLR. Fehler, bei denen das Programm bleibt, wie es war:
+Programmzeilen hinter einem alten Block, keine Zeilennummern mehr frei (bis
+63999), zu wenig BASIC-Speicher (gerechnet mit 1 KB Rest für die Variablen
+des Unterprogramms). Die Kopfzeilen wandelt `rom/bauen.sh` mit
+`tools/bas.py` um (`rom/sprite_kopf.inc`), die Token stimmen so immer mit
+dem gebauten BASIC überein.
 
 **BASIC:** `MAP l[,x,y]`, `TILE l,x,y,t[,f]` und `TILE(l,x,y)` (siehe
 BASIC). Der Kern reicht sie als Befehle 24 und 25 und Funktion 9 an das
@@ -1315,7 +1339,7 @@ findet den Ausgang. Die Datei ist eine Cartridge wie aus `SAVE`: Programm,
   `cartridge.py data` schreibt die belegten Spritemuster als DATA-Zeilen
   (je Muster Nummer und Bank, dann vier Zeilen zu vier Pixelzeilen, unter
   80 Zeichen) mit einem Unterprogramm ab Zeile 9000, das sie per `PATTERN`
-  anlegt und die Banken in `PB()` ablegt – für Programme, die ihre Figuren
+  anlegt und die Banken in `PB()` ablegt (dasselbe wie Taste B, siehe oben) – für Programme, die ihre Figuren
   ohne Werkstatt-Anhang mitbringen sollen.
 - Das BASIC-Programm entsteht aus `programme/glowmine.bas.vorlage`; Münzen,
   Fledermäuse, Tür und Start schreibt das Werkzeug als DATA dazu.

@@ -26,6 +26,25 @@ with open("rom/kern_sym.inc", "w") as f:
     for n in ("l_befehl", "l_funktion", "l_getin", "palette", "zeichensatz", "baenke", "nmi"):
         f.write(f"K_{n.upper()} = ${lbl[n]:06x}\n")
 PY
+# Kopfzeilen fuer die DATA-Zeilen der Werkstatt (rom/spritedata.asm), mit
+# denselben Woertern umgewandelt wie im gebauten BASIC
+python3 - <<'PY2'
+import re, sys
+sys.path.insert(0, "tools")
+import bas
+woerter, tokens = bas.wortlisten()
+# Byte n (1-31) = Zeilennummer Anfang + (n - 1) x 10 (setzt das ROM ein)
+zeilen = ["REM SPRITE PATTERNS FROM THE WORKSHOP - GOSUB \x01", "DIM PB(127):RESTORE",
+          'READ A$:IF A$<>"SPRITEDATA" THEN \x03', "READ M:IF M<0 THEN RETURN",
+          "READ PB(M):FOR Z=0 TO 15:READ A$:PATTERN M,Z,A$:NEXT:GOTO \x04", "DATA SPRITEDATA"]
+with open("rom/sprite_kopf.inc", "w") as f:
+    f.write("; Automatisch erzeugt von rom/bauen.sh (tools/bas.py): die Kopfzeilen\n")
+    f.write(f"SX_DATATK = {tokens['DATA']}\nsx_kopf\n")
+    for z in zeilen:
+        b = bas.crunch(z, woerter, tokens, 0, False)
+        f.write(f"\t.byte {len(b)}, " + ", ".join(f"${x:02x}" for x in b) + f"\t; {re.sub(r'[\x01-\x1f]', lambda m: '*+%d' % (10 * (ord(m.group()) - 1)), z)}\n")
+    f.write("\t.byte 0\n")
+PY2
 ( cd rom && 64tass --long-branch -b -q -o dos.bin -L dos.lst dos.asm )
 python3 - <<'PY'
 d = open("rom/dos.bin", "rb").read()

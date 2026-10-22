@@ -1499,9 +1499,11 @@ _bank
 +	and #$df                    ; Buchstaben gross
 	cmp #'S'
 	beq +
+	cmp #'B'
+	beq +
 	cmp #'L'
 	bne ++
-+	ldx sp_art                  ; S, L: Sprites austauschen (nur SPRITES, ws_austausch.asm)
++	ldx sp_art                  ; S, L, B: Sprites austauschen (nur SPRITES, ws_austausch.asm)
 	bne +
 	jmp sd_taste
 +	cmp #'D'

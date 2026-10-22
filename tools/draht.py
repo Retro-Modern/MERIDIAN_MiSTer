@@ -214,8 +214,27 @@ class Tor:
             self.offen = False
 
 
+def spiele_ordner(name="MERIDIAN", wurzel="/media"):
+    """Der Ordner games/MERIDIAN, wie ihn Main_MiSTer fuer den Core sucht
+    (file_io.cpp, findPrefixDir): zuerst die USB-Laufwerke usb0-usb5 (je
+    MERIDIAN und games/MERIDIAN), dann network, dann cifs, zuletzt die
+    SD-Karte. Gibt es ihn nirgends, gilt games/MERIDIAN auf der SD-Karte -
+    so zeigen Laufwerk 3 und das OSD immer denselben Ordner."""
+    fat = os.path.join(wurzel, "fat")
+    kandidaten = []
+    for x in range(6):
+        u = os.path.join(wurzel, "usb%d" % x)
+        kandidaten += [os.path.join(u, name), os.path.join(u, "games", name)]
+    for w in (os.path.join(wurzel, "network"), os.path.join(fat, "cifs"), fat):
+        kandidaten += [os.path.join(w, name), os.path.join(w, "games", name)]
+    for k in kandidaten:
+        if os.path.isdir(k):
+            return k
+    return os.path.join(fat, "games", name)
+
+
 class Dienst:
-    def __init__(self, fenster, postfach, ordner, nur_meridian):
+    def __init__(self, fenster, postfach, ordner, nur_meridian, ordner_auto=False):
         self.m = fenster
         self.nur_meridian = nur_meridian
         self.aktiv = None if nur_meridian else True   # None: noch nicht geprueft
@@ -241,6 +260,35 @@ class Dienst:
         self.wach_zeit = 0.0
         self.port = 0
         self.adresse_zeit = 0.0
+        self.ordner_auto = ordner_auto  # USB-Laufwerk kann spaeter kommen oder gehen
+        self.ordner_zeit = 0.0
+
+    def ordner_setzen(self, ordner):
+        """games/MERIDIAN woanders (USB-Laufwerk eingesteckt oder weg):
+        Laufwerk 3, Browser-Ablage, Wetter, SID JAM und Netz-Jam ziehen mit"""
+        self.ordner = ordner
+        self.dateien = os.path.join(ordner, "files")
+        try:
+            os.makedirs(self.dateien, exist_ok=True)
+        except OSError as e:
+            print("Laufwerk 3:", e, flush=True)
+        if self.ablage:
+            self.ablage.ordner = self.dateien
+        if self.wetter:
+            self.wetter.pfad = os.path.join(ordner, "wetter.json")
+        if self.takjam:
+            self.takjam.dateien = self.dateien
+        if sidjam_dienst:
+            sidjam_dienst.MERIDIAN = ordner
+        print("Laufwerk 3:", self.dateien, flush=True)
+
+    def ordner_nachfuehren(self, jetzt):
+        if not self.ordner_auto or jetzt - self.ordner_zeit < 3.0:
+            return
+        self.ordner_zeit = jetzt
+        neu = spiele_ordner()
+        if neu != self.ordner:
+            self.ordner_setzen(neu)
 
     # -------------------------------------------------- Welcher Core?
     def kern_pruefen(self):
@@ -711,6 +759,7 @@ class Dienst:
             if kanal.puffer and jetzt - kanal.zeit > 0.3:
                 kanal.zeile_rein(kanal.puffer.rstrip(b"\r"))
                 kanal.puffer = b""
+        self.ordner_nachfuehren(jetzt)
         if jetzt - self.herz_zeit > 0.05:
             self.herz = (self.herz + 1) & 0xFF
             self.m[HERZ] = self.herz
@@ -754,7 +803,7 @@ def telnet_weg(daten, sock):
 def main():
     a = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     a.add_argument("--datei", help="Fenster aus einer Datei (Simulation)")
-    a.add_argument("--ordner", default="/media/fat/games/MERIDIAN", help="Ordner fuer DISK und FILES")
+    a.add_argument("--ordner", help="Ordner fuer DISK und FILES (Vorgabe: games/MERIDIAN wie beim MiSTer, USB-Laufwerk vor SD-Karte, auch spaeter eingesteckt)")
     a.add_argument("--port", type=int, default=816, help="Browser-Ablage (0: aus)")
     o = a.parse_args()
     postfach = None
@@ -766,8 +815,12 @@ def main():
         fd = os.open("/dev/mem", os.O_RDWR | os.O_SYNC)
         fenster = mmap.mmap(fd, 65536, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=FENSTER)
         postfach = mmap.mmap(fd, 1024 * 1024, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=POSTFACH)
-    os.makedirs(o.ordner, exist_ok=True)
-    d = Dienst(fenster, postfach, o.ordner, nur_meridian=not o.datei)
+    ordner = o.ordner or spiele_ordner()
+    os.makedirs(ordner, exist_ok=True)
+    d = Dienst(fenster, postfach, ordner, nur_meridian=not o.datei, ordner_auto=not o.ordner)
+    if sidjam_dienst:
+        sidjam_dienst.MERIDIAN = ordner
+    print("Laufwerk 3:", d.dateien, flush=True)
     if o.port and ablage_seite:
         try:
             d.ablage = ablage_seite.Ablage(d.dateien, d.verzeichnis, zu_meridian)

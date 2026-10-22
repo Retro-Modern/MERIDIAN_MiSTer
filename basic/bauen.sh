@@ -33,7 +33,8 @@ with open("../rom/basic.hex", "w") as f:
     f.write("\n".join(f"{b:02x}" for b in rom) + "\n")
 with open("../rom/basic_sym.inc", "w") as f:
     f.write("; Automatisch erzeugt von basic/bauen.sh\n")
-    for n in ("ROMLOC", "RAMLOC", "INIT", "START", "READY", "BUF", "BASIC_ENDE", "DATENBANK"):
+    for n in ("ROMLOC", "RAMLOC", "INIT", "START", "READY", "BUF", "BASIC_ENDE", "DATENBANK", "TXTTAB", "VARTAB",
+              "ARYTAB", "STREND", "FRETOP", "MEMSIZ", "DATPTR", "OLDTXT"):
         f.write(f"B_{n} = ${lbl[n]:04x}\n")
     f.write(f"B_LAENGE = ${bis - von:04x}\n")
     f.write(f"B_ERW = ${evon:04x}\nB_ERW_ROM = ${ERW_ROM:04x}\nB_ERW_LAENGE = ${ebis - evon:04x}\n")
