@@ -4,11 +4,18 @@
 Eine Cartridge ist das, was SAVE "name" schreibt, wenn die Werkstatt Daten
 hat (rom/ws_datei.asm): das BASIC-Programm, dahinter Abschnitte (Art 1 Byte,
 Laenge 3 Byte, Daten), am Ende die Laenge des Programms (3 Byte) und "MWS1".
+Eine Sprite-Datei aus der Werkstatt (SPRITES, Taste S: NAME.SPR) hat denselben
+Aufbau mit leerem Programm (0, 0) und den Abschnitten Sprites und Look - alle
+Befehle hier lesen sie genauso.
 
     cartridge.py liste SPIEL.BAS [--disk BILD.DSK]   Programm und Abschnitte
     cartridge.py bilder SPIEL.BAS ziel/ [--disk BILD.DSK]
                                 Sprites, Kacheln, Karten, Look und Zeichensatz
                                 als PNG (mit der Palette der Cartridge)
+    cartridge.py data SPIEL.BAS [--disk BILD.DSK] [--zeile 9000] [--aus text.bas]
+                                die belegten Spritemuster als BASIC-Unterprogramm
+                                mit DATA-Zeilen: GOSUB 9000 legt sie mit PATTERN
+                                an, PB(m) haelt die Palettenbank fuer SPRITE
 
 Als Modul: Cartridge() sammelt, was die Werkstatt haelt - 128 Spritemuster,
 256 Kacheln, zwei Karten, 64 Klaenge, den Look und den Zeichensatz -, datei()
@@ -323,6 +330,36 @@ def bilder(c, ziel, zoom=3):
     im.resize((256 * zoom, 64 * zoom), Image.NEAREST).save(os.path.join(ziel, "font.png"))
 
 
+def data_zeilen(c, name, start=9000, schritt=10):
+    """Die belegten Spritemuster als BASIC-Text: ein Unterprogramm, das sie mit
+    PATTERN wieder anlegt. Je Muster eine DATA-Zeile mit Nummer und Bank, dann
+    vier Zeilen zu vier Pixelzeilen (16 Hexziffern, "." = durchsichtig) - so
+    bleibt jede Zeile unter 80 Zeichen. Die Liste endet mit -1."""
+    zeilen, nr = [], start
+
+    def zeile(text):
+        nonlocal nr
+        zeilen.append(f"{nr} {text}")
+        nr += schritt
+    belegt = [n for n in range(128) if any(c.muster[n * 128:(n + 1) * 128])]
+    zeile(f"REM {len(belegt)} SPRITEMUSTER AUS {name.upper()} - GOSUB {start}")
+    zeile("DIM PB(127)")
+    schleife = nr
+    zeile("READ M:IF M<0 THEN RETURN")
+    zeile("READ PB(M):FOR Z=0 TO 15:READ A$:PATTERN M,Z,A$:NEXT:GOTO " + str(schleife))
+    for n in belegt:
+        roh = c.muster[n * 128:(n + 1) * 128]
+        px = []
+        for b in roh:
+            px += [b >> 4, b & 15]
+        reihen = ["".join("." if v == 0 else "%X" % v for v in px[z * 16:(z + 1) * 16]) for z in range(16)]
+        zeile(f"DATA {n},{c.muster_bank[n]}")
+        for i in range(0, 16, 4):
+            zeile("DATA " + ",".join(reihen[i:i + 4]))
+    zeile("DATA -1")
+    return zeilen
+
+
 def datei_holen(name, disk):
     if disk:
         import disk as d
@@ -335,6 +372,8 @@ def main():
     u = a.add_subparsers(dest="befehl", required=True)
     b = u.add_parser("liste"); b.add_argument("datei"); b.add_argument("--disk")
     b = u.add_parser("bilder"); b.add_argument("datei"); b.add_argument("ziel"); b.add_argument("--disk")
+    b = u.add_parser("data"); b.add_argument("datei"); b.add_argument("--disk")
+    b.add_argument("--zeile", type=int, default=9000); b.add_argument("--aus")
     o = a.parse_args()
     daten = datei_holen(o.datei, o.disk)
     prog, c, liste = lesen(daten)
@@ -351,6 +390,15 @@ def main():
             kl = sum(1 for n in range(64) if any(c.klaenge[n * 132:(n + 1) * 132]))
             print(f"  {belegt} Muster, {kach} Kacheln, {kl} Klaenge, {len(c.leuchten)} leuchtende Farben "
                   f"(Staerke {c.staerke}), Tusche {c.tinte} ({c.dx},{c.dy}{', Ebene B' if c.ebene_b else ''})")
+    elif o.befehl == "data":
+        if not liste:
+            sys.exit(f"{o.datei}: keine Werkstatt-Daten (kein MWS1)")
+        text = "\n".join(data_zeilen(c, os.path.basename(o.datei).split(".")[0], o.zeile)) + "\n"
+        if o.aus:
+            open(o.aus, "w").write(text)
+            print(f"{o.aus}: {text.count(chr(10))} Zeilen ab {o.zeile}")
+        else:
+            sys.stdout.write(text)
     else:
         bilder(c, o.ziel)
         print(f"Bilder in {o.ziel}")

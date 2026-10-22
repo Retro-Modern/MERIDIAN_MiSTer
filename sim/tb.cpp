@@ -431,8 +431,23 @@ int main(int argc, char** argv) {
     uint64_t takte = (uint64_t)(sekunden * TAKT);
     const bool im_reset = getenv("MERIDIAN_MENUE_IM_RESET") != nullptr;
     uint64_t reset_los = 0;
+    // Reset aus dem OSD mitten im Lauf: MERIDIAN_RESET_BEI=bild[:mikrosekunden]
+    // (Main_MiSTer setzt das Statusbit und loescht es gleich wieder - einige us)
+    int reset_bei = -1;
+    uint64_t reset_us = 20, reset_ende = 0;
+    if (getenv("MERIDIAN_RESET_BEI")) {
+        long us = 20;
+        sscanf(getenv("MERIDIAN_RESET_BEI"), "%d:%ld", &reset_bei, &us);
+        reset_us = (uint64_t)us;
+    }
     for (uint64_t t = 0; t < takte; t++) {
         if (t == 50 && !im_reset) top->reset = 0;
+        if (reset_bei >= 0 && frame == reset_bei && !reset_ende) {
+            reset_ende = t + TAKT * reset_us / 1000000 + 1;
+            top->reset = 1;
+            printf("Bild %d: Reset aus dem OSD (%lu us)\n", frame, (unsigned long)reset_us);
+        }
+        if (reset_ende && t == reset_ende) top->reset = 0;
         if (im_reset && m_fertig && reset_los == 0) reset_los = t + TAKT / 100;
         if (im_reset && reset_los && t == reset_los) {
             top->reset = 0;

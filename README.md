@@ -293,7 +293,7 @@ driven with the mouse and a few keys; the help lines on each tab list them.
 
 | Key | Tab | |
 |---|---|---|
-| F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline |
+| F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline; **S** saves the patterns with the look as a file, **L** loads them |
 | F2 | TILES | 256 tiles (8×8) in the same painter, previewed side by side to check that they tile. Tile 0 stays empty – empty maps are made of it |
 | F3 | MAP | two maps of 64×32 tiles. The upper part of the screen shows the maps as PINSEL draws them (the copper switches both layers to tile mode there), the lower part the tile picker |
 | F4 | SOUNDS | 64 short sounds: paint pitch and volume over 32 steps, eight waveforms, eight effects (slide, vibrato, drop, fades, arpeggios), speed and loop |
@@ -302,7 +302,12 @@ driven with the mouse and a few keys; the help lines on each tab list them.
 
 `SAVE "GAME"` stores the program together with everything in the workshop
 that is not empty, `LOAD "GAME"` brings it all back – one file per game.
-Old files load as before. In the program, `SPRITE` uses the patterns,
+Old files load as before. To use the same sprites in several programs,
+press **S** in SPRITES: it saves the 128 patterns, their banks and the look
+(palette, glow, ink) as `NAME.SPR`. **L** loads patterns and look from such
+a file or from any saved program (type the ending, e.g. `GLOWMINE.BAS`) and
+leaves the program in memory alone; `LOAD "NAME.SPR"` starts an empty
+program with those sprites. In the program, `SPRITE` uses the patterns,
 `MAP`/`TILE` the tiles and maps, `SFX` the sounds and `LOOK` the look and
 font:
 
@@ -355,7 +360,10 @@ rectangles). `tools/cartridge.py` puts it together in the workshop's file
 format – the same works for your own games – and takes a cartridge apart
 again: `cartridge.py liste GAME.BAS` lists its sections, `cartridge.py
 bilder GAME.BAS dir/` draws sprites, tiles, maps, palette and font as PNG
-files (needs Pillow). `programme/glowmine_durchlauf.py` replays the game
+files (needs Pillow), and `cartridge.py data GAME.BAS` writes the sprite
+patterns as BASIC `DATA` lines with a small subroutine (`GOSUB 9000`) that
+creates them again with `PATTERN` – `PB(m)` then holds the palette bank of
+pattern m for `SPRITE`. `programme/glowmine_durchlauf.py` replays the game
 logic in Python along a planned route, so a change to the level can be
 checked before it goes on the disk. `KONZEPT.md` (section *Werkstatt*) has
 the details, among them how to get BASIC to 30 steps per second.
@@ -459,8 +467,8 @@ SID JAM also plays in the browser:
   `MERIDIAN_JOY="frame:value;…"` holds joystick 1 from a given frame on
   (bits as in `JOY(1)`).
 - **Your own programs:** `programme/bauen.sh name` assembles to a `.MER`.
-  `tools/bas.py` turns BASIC text into `.BAS` (it reads `basic/basic.lbl`,
-  which `rom/bauen.sh` writes), `tools/cartridge.py` builds and checks
+  `tools/bas.py` turns BASIC text into `.BAS` and back (it reads
+  `basic/basic.lbl`, which is in the repository; `rom/bauen.sh` writes it anew), `tools/cartridge.py` builds and checks
   workshop cartridges, and `tools/disk.py` creates and fills FAT16 disk
   images on a PC or Mac.
 

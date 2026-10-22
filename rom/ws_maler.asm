@@ -118,6 +118,7 @@ sp_wahl                         ; auf Art A umstellen
 
 sp_oeffnen
 	.as
+	stz sd_halten               ; neuer Reiter: keine alte Meldung
 	#text 2, 33, F_TITEL, t_sp_wz
 	#text 2, 47, F_TITEL, t_sp_vor
 	#text 2, 66, F_TITEL, t_sp_farben
@@ -133,7 +134,10 @@ sp_oeffnen
 _hilfe
 	#text 26, 1, F_GRUND, t_sp_hilfe1
 	#text 27, 1, F_GRUND, t_sp_hilfe2
-	jsr sp_laden
+	lda sp_art
+	bne +
+	#text 28, 1, F_GRUND, t_sd_hilfe
++	jsr sp_laden
 	jmp sp_alles
 
 t_sp_wz      .null "TOOLS"
@@ -1109,6 +1113,11 @@ sp_farbe_setzen                 ; sp_f = A (Zeichen: nur 0 und 1), Farbfelder ne
 ; Statuszeile
 sp_status
 	.as
+	lda sd_halten               ; eine Meldung von S/L steht noch (ws_austausch.asm)
+	beq +
+	dec sd_halten
+	rts
++
 	lda sp_art
 	bne +
 	#text 29, 0, F_STATUS, t_sp_status
@@ -1488,7 +1497,14 @@ _bank
 	inc a
 	jmp sp_waehlen
 +	and #$df                    ; Buchstaben gross
-	cmp #'D'
+	cmp #'S'
+	beq +
+	cmp #'L'
+	bne ++
++	ldx sp_art                  ; S, L: Sprites austauschen (nur SPRITES, ws_austausch.asm)
+	bne +
+	jmp sd_taste
++	cmp #'D'
 	bne +
 	stz sp_wz
 	jmp sp_werkzeuge

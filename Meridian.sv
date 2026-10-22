@@ -66,10 +66,13 @@ localparam CONF_STR = {
 	"O[6],Cartridge start,Auto,Off;",
 	"T[7],Eject cartridge;",
 	"-;",
-	"J1,Fire A,Fire B,Fire C,Fire D,Start,Select;",
-	"-;",
 	"T[0],Reset;",
 	"R[0],Reset & close menu;",
+	// J1 erst hinter allen waehlbaren Eintraegen: Main_MiSTer zaehlt die
+	// unsichtbare J-Zeile beim Auswaehlen mit, beim Zeichnen nicht - davor
+	// verschob sie alles darunter um eins ("Reset" tat nichts, "Reset &
+	// close menu" setzte zurueck, schloss aber nicht)
+	"J1,Fire A,Fire B,Fire C,Fire D,Start,Select;",
 	"v,0;",
 	"V,v",`BUILD_DATE
 };

@@ -138,6 +138,12 @@ ws_start
 	pld
 	sta w_reiter
 	stz w_ende
+	stz sd_len                  ; Sprites austauschen: Name leer, Laufwerk wie DRIVE
+	stz sd_name
+	stz sd_halten
+	lda DO_STD_LW
+	and #3
+	sta sd_lw
 	ldx #$7f                    ; Stand der Werkzeuge vom letzten Besuch
 -	lda @l KART_STAND,x
 	sta W_RAM+$80,x
@@ -622,6 +628,7 @@ w_stelle                        ; A / Y: Ziffer schreiben, A = Rest
 
 	.include "ws_maler.asm"
 	.include "ws_datei.asm"
+	.include "ws_austausch.asm"
 	.include "ws_karte.asm"
 	.include "ws_klang.asm"
 	.include "ws_look.asm"

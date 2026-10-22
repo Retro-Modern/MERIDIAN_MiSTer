@@ -1222,7 +1222,7 @@ Kacheln und Karten liegen in einer Datei. Die Werkzeuge stecken im ROM ab
 | Tasten | SPRITES und TILES | MAP |
 |---|---|---|
 | Maus | links malen/füllen, rechts Farbe aufnehmen, Klick auf Farbe oder Bogen wählt | links setzen, rechts Kachel aufnehmen, Klick in die Auswahl wählt |
-| Tasten | D zeichnen, F füllen, H/V spiegeln, R drehen, Pfeile schieben, C kopieren, P einfügen, X leeren, U zurück, 0–9 Farbe, +/− Bank, `,` `.` voriges/nächstes | 1/2 Karte, Pfeile rollen, H/V gespiegelt setzen, `,` `.` Kachel, X Karte leeren, U zurück |
+| Tasten | D zeichnen, F füllen, H/V spiegeln, R drehen, Pfeile schieben, C kopieren, P einfügen, X leeren, U zurück, 0–9 Farbe, +/− Bank, `,` `.` voriges/nächstes; nur SPRITES: S Sprites und Look als Datei sichern, L sie holen | 1/2 Karte, Pfeile rollen, H/V gespiegelt setzen, `,` `.` Kachel, X Karte leeren, U zurück |
 
 SOUNDS: Maus oben Tonhöhe, darunter Lautstärke (rechts: Pause bzw. 0), Klick
 in die Zeilen WAVE und EFFECT setzt die gewählte Welle bzw. den Effekt, links
@@ -1266,6 +1266,20 @@ und `MWS1`. Ist die Werkstatt leer, bleibt die Datei, wie sie immer war.
 Werkstatt und verteilt die Abschnitte; unbekannte überspringt es. Alte
 Dateien laden wie bisher. Die Datei darf bis 128 KB groß sein.
 
+**Sprites austauschen** (22.10.2026, `rom/ws_austausch.asm`): In SPRITES
+sichert **S** die 128 Muster mit ihren Banken und den Look (Palette,
+Leuchten, Tusche) als `NAME.SPR` – eine Datei wie aus `SAVE`, nur mit
+leerem Programm (`0, 0`, Länge 2) und den Abschnitten 1 und 5. `LOAD
+"NAME.SPR"` gibt also ein leeres Programm mit diesen Sprites. **L** holt
+Muster, Banken und Look aus so einer Datei oder aus jedem mit `SAVE`
+gesicherten Programm (mit Endung, z. B. `GLOWMINE.BAS`); das Programm im
+Speicher, Kacheln, Karten, Klänge und der Zeichensatz bleiben. Hat die
+Quelle keinen eigenen Look, gilt der Startlook. Den Namen tippt man in die
+Statuszeile (A–Z 0–9 `_` `-` `.`, ohne Endung gilt `.SPR`), Tab wechselt
+das Laufwerk (Vorgabe `DRIVE`), Return los, Esc zurück. So nutzen mehrere
+Programme dieselben Figuren, ohne sie als DATA-Zeilen mitzuschleppen
+(die gibt es am Mac: `cartridge.py data`).
+
 **BASIC:** `MAP l[,x,y]`, `TILE l,x,y,t[,f]` und `TILE(l,x,y)` (siehe
 BASIC). Der Kern reicht sie als Befehle 24 und 25 und Funktion 9 an das
 Werkstatt-ROM weiter (`$FFC00C`, A = 0 MAP, 1 TILE, 2 TILE()). `MAP` merkt
@@ -1298,6 +1312,11 @@ findet den Ausgang. Die Datei ist eine Cartridge wie aus `SAVE`: Programm,
   setzt sie im Format von `ws_datei.asm` zusammen; `cartridge.py liste` zeigt
   die Abschnitte einer Datei, `cartridge.py bilder` malt Sprites, Kacheln,
   Karten, Palette und Zeichensatz mit der Palette der Cartridge als PNG.
+  `cartridge.py data` schreibt die belegten Spritemuster als DATA-Zeilen
+  (je Muster Nummer und Bank, dann vier Zeilen zu vier Pixelzeilen, unter
+  80 Zeichen) mit einem Unterprogramm ab Zeile 9000, das sie per `PATTERN`
+  anlegt und die Banken in `PB()` ablegt – für Programme, die ihre Figuren
+  ohne Werkstatt-Anhang mitbringen sollen.
 - Das BASIC-Programm entsteht aus `programme/glowmine.bas.vorlage`; Münzen,
   Fledermäuse, Tür und Start schreibt das Werkzeug als DATA dazu.
 - **Karten:** Karte 1 (Ebene A) ist die Höhlenwand, Karte 2 (Ebene B) das
@@ -1504,7 +1523,7 @@ von jedem Laufwerk.
 | Modul in der Simulation | `MERIDIAN_MENUE=../programme/counter.mod MERIDIAN_MENUE_INDEX=2 [MERIDIAN_MODUL_AUS=1] [MERIDIAN_MODUL_RAUS=bild] ./obj_dir/meridian_sim …` |
 | In der Simulation tippen | `MERIDIAN_TIPPEN='m d000\n' ./obj_dir/meridian_sim 3 out 0 170` |
 | Joystick 1 in der Simulation halten | `MERIDIAN_JOY="bild:wert;…" ./obj_dir/meridian_sim …` (ab Bild gilt wert, Bits wie `JOY(1)`) |
-| Cartridge am Mac prüfen (Abschnitte, Bilder) | `python3 tools/cartridge.py liste SPIEL.BAS [--disk BILD.DSK]` · `../.venv/bin/python tools/cartridge.py bilder SPIEL.BAS ordner/` |
+| Cartridge am Mac prüfen (Abschnitte, Bilder, Sprites als DATA) | `python3 tools/cartridge.py liste SPIEL.BAS [--disk BILD.DSK]` · `../.venv/bin/python tools/cartridge.py bilder SPIEL.BAS ordner/` · `python3 tools/cartridge.py data SPIEL.BAS [--zeile 9000] [--aus text.bas]` |
 | GLOWMINE bauen (Daten, Programm, Cartridge) | `python3 programme/glowmine.py [--bilder ordner]` → `programme/glowmine.bas`, `programme/daten/glowmine.mws` |
 | GLOWMINE durchspielen lassen (Nachbau der Spiellogik, geplanter Weg) | `python3 programme/glowmine_durchlauf.py` · Testfassung mit Eingaben aus DATA: `--test GMTEST.BAS --disk BILD.DSK`, im Simulator `LOAD "GMTEST"`, `RUN`, `MERIDIAN_JOY="300:16;310:0"` |
 
