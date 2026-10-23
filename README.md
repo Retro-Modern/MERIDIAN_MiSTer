@@ -69,7 +69,9 @@ screen.
 
 The BASIC is Microsoft BASIC M6502 1.1 from 1978, which Microsoft published
 under the MIT license in 2025. It runs in the 65C816's 6502 emulation mode,
-with programs and variables in their own 64 KB bank. MERIDIAN adds:
+with programs and variables in their own 64 KB bank. MERIDIAN adds the
+words below – **[BASIC.md](BASIC.md) is the full command reference**, with
+value ranges and a short, tested example for each:
 
 - **Screen:** `CLS` `COLOR` `MODE 40/80` `GRAPHIC` `PLOT` `LINE`
   `PALETTE` `GRADIENT`

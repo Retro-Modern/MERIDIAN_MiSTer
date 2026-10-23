@@ -1001,6 +1001,9 @@ MIT-Lizenz), maschinell aus MACRO-10 nach 64tass übersetzt
 `basic/meridian.s`. BASIC läuft im **Emulationsmodus** des 65816 – dort ist
 er ein 6502 mit 8 MHz – und spricht über die Brücken mit dem Kern.
 
+**Befehlsreferenz für Anwender** (englisch, mit geprüften Beispielen):
+`BASIC.md`. Hier folgt die Technik.
+
 Gleitkomma mit 9 Stellen (40 Bit), Zeichenketten, Felder, `GET` wartet nicht,
 `Esc` bricht ab, `?` steht für `PRINT`. **47 102 Bytes frei** (C64: 38 911).
 
