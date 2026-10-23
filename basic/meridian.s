@@ -596,32 +596,10 @@ M_WARTE                         ; PAUSE n (Bilder)
 	bne --
 +	rts
 
-M_PALETTE                       ; PALETTE n,r,g,b (Anteile 0-15)
-	jsr GETBYT
-	stx M_REG
-	jsr COMBYT
-	txa
-	and #$0f
-	sta M_WELLE                 ; rot
-	jsr COMBYT
-	txa
-	asl a
-	asl a
-	asl a
-	asl a
-	sta ZAEHL                   ; gruen
-	jsr COMBYT
-	txa
-	and #$0f
-	ora ZAEHL                   ; blau
-	pha
-	lda M_REG
-	sta @l PAL_IDX
-	pla
-	sta @l PAL_LO
-	lda M_WELLE
-	sta @l PAL_HI
-	rts
+M_PALETTE                       ; PALETTE n,r,g,b (Anteile 0-15): der Kern setzt
+	ldx #4                      ; die Farbe und merkt sie sich (Befehl 28, seit
+	ldy #28                     ; 23.10.2026 - SHINE und GRADIENT geben sie beim
+	jmp M_ALLG                  ; Ausschalten zurueck)
 
 ; PEEK, POKE, WAIT: Adresse bis 16 MB nach LZ (langer Zeiger)
 M_GETNUM

@@ -127,7 +127,8 @@ Draws a line, colour as with `PLOT`.
 
 Mixes colour `n` (0–255) anew from red, green and blue (0–15 each). It
 changes the colour everywhere at once – text, graphics, sprites – also
-what is already on the screen.
+what is already on the screen. The system remembers it: `SHINE` and
+`GRADIENT` give it back when they are switched off.
 
 ### GRADIENT y1,r1,g1,b1,y2,r2,g2,b2
 
@@ -135,8 +136,9 @@ A colour gradient for the screen background from row `y1` to row `y2`
 (0–239), from colour r1,g1,b1 to r2,g2,b2 (0–15 each). The copper chip
 changes the background colour on every row, so it costs BASIC no time.
 Several gradients add up; `GRADIENT` alone switches them off and gives the
-background its start colour back. It works on the background colour that
-is set when the first gradient starts (`COLOR …,bg`).
+background colour back the value it had before (also one set with
+`PALETTE`). It works on the background colour that is set when the first
+gradient starts (`COLOR …,bg`).
 
 ```basic
 10 CLS:PRINT "SUNSET"
@@ -192,9 +194,8 @@ colour of that point. `SHINE c` removes the points of colour `c`, `SHINE`
 alone removes all. At most 16 shine channels (one per point, plus one
 when a colour's first point is not in row 0).
 
-SHINE writes the colour into the palette row by row; when it is switched
-off, the colour keeps the value of the last row. `LOOK 0` (or `PALETTE`)
-sets the start colours again.
+When the shine of a colour is switched off, the colour gets back the value
+it had before – the start colour, or what `PALETTE` or `LOOK` set.
 
 ### GLOW s[,c,c…]
 
@@ -209,7 +210,7 @@ the next `GLOW`. `GLOW` or `GLOW 0` switches all glowing off.
 ```
 
 Line 10 turns the background colour 6 into a gradient from night blue to
-light blue. Afterwards `SHINE:GLOW:LOOK 0` brings everything back.
+light blue. Afterwards `SHINE:GLOW` switches both off again.
 
 ### INK c[,dx,dy[,b]]
 

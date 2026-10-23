@@ -72,6 +72,7 @@ b_tabelle
 	.word glanz_befehl, leucht_befehl, tinte_befehl  ; 21 SHINE, 22 GLOW, 23 INK (PINSEL-Look)
 	.word karte_befehl, kachel_befehl              ; 24 MAP, 25 TILE (Werkstatt-ROM)
 	.word klang_befehl, look_befehl                ; 26 SFX, 27 LOOK (Werkstatt-ROM)
+	.word palette_befehl                           ; 28 PALETTE (System-ROM, 23.10.2026)
 
 ; MAP l[,x,y] und TILE l,x,y,t[,f]: die Arbeit macht das Werkstatt-ROM
 karte_befehl
@@ -93,6 +94,10 @@ look_befehl                     ; LOOK [n]
 	.as
 	lda #7
 	jsl WS_BASIC
+	rts
+palette_befehl                  ; PALETTE n,r,g,b: setzen und merken
+	.as
+	jsl PAL_BEFEHL
 	rts
 
 ; SONG "name"[,laufwerk]: TAKTSTOCK-Song laden und im Hintergrund spielen
@@ -122,7 +127,7 @@ lied_stopp
 ;----------------------------------------------------------------------------
 ; PINSEL-Look (MERIDIAN 1.0): SHINE, GLOW, INK
 
-GL_TAB  = $FE1400               ; SHINE: Anzahl, dann je Punkt Farbe, Zeile, r, g, b
+	.include "merkpalette.inc"  ; GL_TAB (SHINE), Merkpalette
 GL_MAX  = 16                    ;   (8 Bit je Anteil), sortiert nach Farbe und Zeile
 GZ      = $02E1                 ; Hilfswerte (Seite 2, hinter SONG_AN)
 gz_n    = GZ+0                  ; 2: Punkte
@@ -143,6 +148,7 @@ glanz_befehl
 	.as
 	lda P_ANZ
 	bne +
+	jsl PAL_GLANZ_AUS           ; Kanaele aus, die Farben wie vorher
 	lda #0
 	sta @l GL_TAB
 	jmp glanz_bauen
@@ -234,9 +240,18 @@ _weg
 	inx
 	bra -
 _ende
+	lda @l GL_TAB               ; wie viele Punkte gehen?
+	sec
+	sbc gz_t
+	pha
 	lda gz_t
 	sta @l GL_TAB
-	jmp glanz_bauen
+	jsr glanz_bauen             ; die Kanaele der anderen Farben
+	pla
+	beq +
+	lda gz_neu                  ; danach die Farbe wie vorher (SHINE schrieb
+	jsl PAL_ZURUECK             ; sie Zeile fuer Zeile in die Palette)
++	jmp b_gut
 
 ; gz_n = Punkte in GL_TAB (eine kaputte Tabelle gilt als leer)
 glanz_anzahl
@@ -1377,15 +1392,10 @@ _zeile
 vl_anteile                      ; Versatz von r1, g1, b1, r2, g2, b2 in P_WERT
 	.word 3, 6, 9, 15, 18, 21
 
-vl_grundfarbe                   ; X = Farbe VL_FARBE aus der Startpalette
-	#akku16
+vl_grundfarbe                   ; X = Farbe VL_FARBE, wie das Programm sie
+	.as                         ; gesetzt hat (PALETTE, LOOK; sonst Startfarbe)
 	lda VL_FARBE
-	and #$00ff
-	asl a
-	tax
-	lda palette,x
-	tax
-	#akku8
+	jsl PAL_GEMERKT
 	rts
 
 teilen                          ; A = A / hilf (16 Bit, ohne Vorzeichen)

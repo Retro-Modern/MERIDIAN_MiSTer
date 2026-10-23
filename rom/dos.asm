@@ -152,6 +152,10 @@ ldx8	.macro adr                 ; X = Byte (16 Bit, obere Haelfte 0); Akku danac
 	jmp mon_dis                 ; $FF:4015   eine Zeile disassemblieren
 	jmp mon_asm                 ; $FF:4018   eine Zeile uebersetzen
 	jmp sprite_data             ; $FF:401B Werkstatt: Sprites als DATA-Zeilen (rom/spritedata.asm)
+	jmp pal_befehl              ; $FF:401E PALETTE (rom/palette.asm, 23.10.2026)
+	jmp pal_gemerkt             ; $FF:4021   A = Farbe -> X = gemerkter Wert
+	jmp pal_zurueck             ; $FF:4024   A = Farbe wie gemerkt nach PINSEL
+	jmp pal_glanz_aus           ; $FF:4027   SHINE aus, alle Farben zurueck
 
 dos_befehl
 	.as
@@ -2070,5 +2074,6 @@ P_TPTR_M   = $039D
 	.include "ordner.asm"
 	.include "monitor.asm"
 	.include "spritedata.asm"
+	.include "palette.asm"
 
 	.cerror * > $8000, "DOS-ROM zu gross"

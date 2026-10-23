@@ -28,6 +28,7 @@ PIN_PIDX  = $C008
 PIN_PLO   = $C009
 PIN_PHI   = $C00A
 PIN_LM_IDX = $C050              ; (LM_DATEN $C051 zaehlt den Index weiter)
+	.include "merkpalette.inc"  ; Merkpalette (rom/palette.asm)
 
 LX0 = 8                         ; Gitter 16 x 16 Felder zu 9 Punkten
 LY0 = 24
@@ -70,12 +71,16 @@ lk_zeigen
 	ldx #0
 -	lda @l LK_PAL,x
 	sta PIN_PLO
-	lda @l LK_PAL+1,x
-	sta PIN_PHI
+	sta @l PAL_MERK,x           ; und merken (rom/palette.asm: SHINE und
+	lda @l LK_PAL+1,x           ; GRADIENT geben beim Ausschalten diese Farbe
+	sta PIN_PHI                 ; zurueck)
+	sta @l PAL_MERK+1,x
 	inx
 	inx
 	cpx #512
 	bne -
+	lda #1
+	sta @l PAL_GUELTIG
 	stz PIN_LM_IDX
 	ldx #0
 -	lda @l LK_MASKE,x
@@ -107,6 +112,8 @@ _aus
 ; Startfarben, kein Leuchten, keine Tusche
 lk_standard
 	.as
+	lda #0                      ; Merkpalette: die Startfarben gelten
+	sta @l PAL_GUELTIG
 	stz PIN_PIDX
 	ldx #0
 -	lda @l K_PALETTE,x

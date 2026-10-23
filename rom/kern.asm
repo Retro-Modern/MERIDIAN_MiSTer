@@ -86,6 +86,10 @@ WERKSTATT  = $FFC000            ; ROM Bank $FF (MERIDIAN 1.0): A = Reiter 0-5
 WS_SICHERN = $FFC004            ;   SAVE: Programm + Daten der Werkstatt
 WS_LADEN   = $FFC008            ;   LOAD: aus WS_PUFFER verteilen
 WS_PUFFER  = $FB0000            ;   Puffer fuer LOAD/SAVE (bis $FC:FFFF)
+PAL_BEFEHL = $FF401E            ; System-ROM (rom/palette.asm, 23.10.2026): PALETTE,
+PAL_GEMERKT = $FF4021           ;   gemerkter Wert einer Farbe (X), Farbe zurueck,
+PAL_ZURUECK = $FF4024           ;   SHINE aus mit allen Farben
+PAL_GLANZ_AUS = $FF4027
 WS_BASIC   = $FFC00C            ;   A = 0 MAP, 1 TILE, 2 TILE(), 3 Direktmodus, 4 Kaltstart
 KA_ZUSTAND = $F84300            ;   BASIC MAP: welche Karte gerade zu sehen ist
 SFX_AN     = $02F4              ;   SFX: Bit v = Stimme v spielt einen Klang ($02F5-$02FF Abspieler)
@@ -490,6 +494,7 @@ anzeige_zuruecksetzen
 	bne -
 	lda #0                      ; keine Glanzpunkte (SHINE)
 	sta @l GL_TAB
+	sta @l PAL_GUELTIG          ; es gelten die Startfarben (Merkpalette, rom/palette.asm)
 	sta @l KA_ZUSTAND           ; keine Karten (MAP), die Ebenen setzt es hier
 	stz SFX_AN                  ; keine Klaenge (SFX), still macht orgel_still
 	lda #1
