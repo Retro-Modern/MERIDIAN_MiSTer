@@ -308,8 +308,10 @@ start
 
 	; Steckt ein Modul (und ist es im Menue nicht abgeschaltet), ruft der
 	; Kern es jetzt auf: per JSL, nativ, Akku 8 / Index 16 Bit, direkte
-	; Seite 0, Datenbank 0, Interrupts an. Kehrt es mit RTL zurueck, geht
-	; es weiter ins BASIC.
+	; Seite 0, Datenbank 0, Interrupts an. Kehrt es mit RTL zurueck, raeumt
+	; der Kern auf (CPU, Anzeige) und es geht weiter ins BASIC. Interrupt-
+	; Haken und Klang bleiben: der Tipp-Haken von HORIZONT tippt danach
+	; LOAD und RUN, ein Song darf weiterspielen.
 	lda BOT_STATUS
 	and #$0c
 	cmp #$04                    ; Bit 2 steckt, Bit 3 nicht starten
@@ -354,7 +356,8 @@ start
 	pha
 	plb
 	cli
-_basic
+	jsr anzeige_zuruecksetzen   ; und die Anzeige wie nach einem Fernstart (fehlte
+_basic                          ; bis 25.10.2026: nach TIEFGANG blieb das Bild stehen)
 	jmp basic_kalt              ; wie beim C64: gleich ins BASIC
 _modul
 	jml [zeiger]

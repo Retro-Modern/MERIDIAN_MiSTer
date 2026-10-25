@@ -436,7 +436,12 @@ das Modul vor dem BASIC auf – außer, im Menü steht „Cartridge start: Off�
 
 Der Kern meldet „MODUL name“ und springt per `JSL` zur Startadresse –
 nativ, Akku 8 / Index 16 Bit, direkte Seite 0, Datenbank 0, Interrupts an.
-Kehrt das Modul mit `RTL` zurück, räumt der Kern auf und startet BASIC. Die
+Kehrt das Modul mit `RTL` zurück, räumt der Kern auf und startet BASIC:
+CPU, Stapel und – seit 25.10.2026 – die Anzeige (`anzeige_zuruecksetzen` wie
+nach einem Fernstart; vorher blieb z. B. nach TIEFGANG die Spielgrafik
+stehen). Interrupt-Haken und Klang bleiben, damit der Tipp-Haken von
+HORIZONT danach LOAD und RUN tippen kann. Wer auch mit älteren Kernen sauber
+zurück will, ruft vor dem `RTL` selbst `JSL $FFCA` (TIEFGANG ab 1.2). Die
 Kernroutinen erreicht nur Code in Bank 0 (`JSR`): Ein Modul kopiert seinen
 Programmteil deshalb ins Chip-RAM (`MVN #$40,#0`) und holt seine Daten
 nach Bedarf aus dem ROM – mit KRAN auch Grafik und Klänge.

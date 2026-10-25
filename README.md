@@ -413,9 +413,12 @@ see the [privacy notice](https://retro-modern.net/en/privacy.html).
 choose it in the OSD under *Insert cartridge*. It starts at every core start
 (OSD *Cartridge start*); `Esc` on the title goes to BASIC. The save lives in
 the cartridge's own save memory. The version is shown at the bottom of the
-title – 1.1 (22 October 2026) fixes music that went badly out of tune when
-the cartridge was inserted after BASIC had run, or after a reset from the
-OSD; just replace the old `TIEFGANG.MOD`.
+title; to update, just replace the old `TIEFGANG.MOD`. 1.2 (25 October 2026):
+`Esc` on the title leaves a clean BASIC screen – before, the game's picture
+stayed and you typed blind (the core from 20261025 cleans up after any
+cartridge, 1.2 does it itself for older cores). 1.1 (22 October 2026) fixed
+music that went badly out of tune when the cartridge was inserted after
+BASIC had run, or after a reset from the OSD.
 
 **Keys** (joystick in brackets): arrows walk, up or `X` jumps (B) – in the
 air against a wall once more: wall jump; space digs (A), with down/up below
