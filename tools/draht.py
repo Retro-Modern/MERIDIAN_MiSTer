@@ -32,8 +32,10 @@ mit Kopf; Art 9 benennt um (alter Name 8.3 in Byte 0-10, neuer in 18-28);
 Art 10 meldet eine Datei (8.3 in Byte 0-10) der Browser-Seite (SEND), Art 11
 holt eine Datei aus dem Netz nach files (Adresse ab Byte 0, http/https).
 Internetradio (App RADIO, radio_dienst.py): Art 12 spielt den Sender mit der
-Adresse im Text (MP3, http/https), Art 13 haelt an; Stand ab $80, Samples in
-zwei Ringen ab $8000 (links) und $C000 (rechts).
+Adresse im Text (MP3, http/https) oder mit "FILE:NAME.MP3" eine Datei von
+Laufwerk 3, Art 13 haelt an, Art 16 schneidet mit (Byte 0: 1 an, 0 aus; die
+MP3-Datei landet auf Laufwerk 3); Stand ab $80, Mitschnitt ab $0880, Samples
+in zwei Ringen ab $8000 (links) und $C000 (rechts).
 SID JAM (App JAM, sidjam_dienst.py): Art 20 mit einem Befehl als Text; Stand
 ab $2000, Auftraege fuer die ORGEL im Ring ab $4000, Samples wie beim Radio
 (Tabelle: sidjam/SCHNITTSTELLEN.md).
@@ -358,16 +360,17 @@ class Dienst:
             self.antworten(nr, len(q), zeile)
         elif art == 3:
             self.antworten(nr, self.status if k == 0 else self.kanaele[k].zustand())
-        elif art in (12, 13):
+        elif art in (12, 13, 16):                   # Radio, Stopp, Mitschnitt
             if not radio_dienst:
                 return self.antworten(nr, -6, b"NO RADIO")
             self.jam_halten()                       # dieselben Sample-Ringe
             if self.takjam:                         # Spektrum und Cover liegen in den Ringen des Netz-Jams
                 self.takjam.stop()
-            if art == 12:
+            if art != 13:
                 self.tor_oeffnen(self.tor_radio, LEBEN_RADIO)
             if not self.radio:
-                self.radio = radio_dienst.Radio(self.tor_radio, zu_meridian)
+                self.radio = radio_dienst.Radio(self.tor_radio, zu_meridian,
+                                                lambda: self.dateien, self.datei_pfad)
             try:
                 status, antwort = self.radio.anfrage(art, text)
             except Exception as e:
@@ -420,8 +423,9 @@ class Dienst:
                 status, antwort = -1, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
         elif 4 <= art <= 11:
-            self.radio_halten()                     # sie schrieben sonst in die Dateidaten
-            self.jam_halten()
+            if art in (5, 6):                       # Lesen und Schreiben brauchen $1000-$FFFF:
+                self.radio_halten()                 # Radio und SID JAM schrieben sonst in die
+                self.jam_halten()                   # Dateidaten (Verzeichnis, Umbenennen usw. nicht)
             try:
                 status, antwort = self.laufwerk(art, bytes(m[TEXT:TEXT + max(17, n)]))
             except Exception as e:
@@ -564,6 +568,11 @@ class Dienst:
             belegt.add((kurz, e))
             liste.append((kurz, e, n))
         return liste
+
+    def datei_pfad(self, name):
+        """RADIO: "NAME.MP3" (8.3, wie der MERIDIAN ihn sieht) -> Pfad oder None"""
+        stamm, _, end = name.upper().partition(".")
+        return self.suchen((stamm[:8].ljust(8) + end[:3].ljust(3)).encode("latin-1"))[0]
 
     def suchen(self, name83):
         name, end = name83[:8].decode("latin-1").strip(), name83[8:11].decode("latin-1").strip()

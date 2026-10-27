@@ -476,14 +476,14 @@ schreibt Status und Antworttext und zuletzt die Antwort-Nummer.
 | `$FD:` | |
 |---|---|
 | `$00` / `$01` | Anfrage-Nr (MERIDIAN) / Antwort-Nr (Dienst) |
-| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand, 4–11 Laufwerk 3 (siehe DOS) und ATLAS, 12/13 Radio, 20 SID JAM, 21 Netz-Jam von TAKTSTOCK |
+| `$02` | Art: 1 Befehl, 2 Zeile holen, 3 Zustand, 4–11 Laufwerk 3 (siehe DOS) und ATLAS, 12/13 Radio, 16 Mitschnitt, 20 SID JAM, 21 Netz-Jam von TAKTSTOCK |
 | `$03` / `$04` | Kanal 0–4 / Länge der Anfrage |
 | `$06/$07` | Status (16 Bit mit Vorzeichen) |
 | `$08` | Länge der Antwort |
 | `$10` | Herzschlag des Dienstes (zählt alle 50 ms) |
-| `$20` / `$21` | Lebenszeichen der Apps JAM / RADIO (ihr Interrupt zählt je Bild). Der Dienst schreibt für RADIO und SID JAM nur durch ein Tor ins Fenster: Es schließt bei Stopp, bei Laufwerk 3, beim Netz-Jam, bei einem anderen Core – und wenn das Lebenszeichen 1,5 s steht (Reset). Sonst schrieben ihre Fäden weiter in die Dateidaten von Laufwerk 3 |
+| `$20` / `$21` | Lebenszeichen der Apps JAM / RADIO (ihr Interrupt zählt je Bild). Der Dienst schreibt für RADIO und SID JAM nur durch ein Tor ins Fenster: Es schließt bei Stopp, beim Lesen oder Schreiben auf Laufwerk 3 (Art 5/6), beim Netz-Jam, bei einem anderen Core – und wenn das Lebenszeichen 1,5 s steht (Reset). Sonst schrieben ihre Fäden weiter in die Dateidaten von Laufwerk 3 |
 | `$100` / `$200` | Anfragetext / Antworttext (je bis 255 Zeichen) |
-| `$0300–$0FFF` | Netz-Jam von TAKTSTOCK: Stand, Eingang `$0400`, Ausgang `$0800`; RADIO nutzt `$0400`/`$0800` für Spektrum und Cover |
+| `$0300–$0FFF` | Netz-Jam von TAKTSTOCK: Stand, Eingang `$0400`, Ausgang `$0800`; RADIO nutzt `$0400`/`$0800` für Spektrum und Cover, `$0880` für die Zeile des Mitschnitts |
 | `$1000–$FFFF` | Dateidaten für Laufwerk 3 (bis 60 KB je Anfrage, Etappe 14) |
 
 Der MERIDIAN-Teil liegt im ROM von Bank `$FF` (`rom/netz.asm`, `$FF4009`):
@@ -1435,10 +1435,17 @@ ATLAS nicht.
 meldet eine Datei der Browser-Seite (SEND), Art 11 holt eine Datei aus dem
 Netz nach `files` (Adresse ab Byte 0, http/https). Art 12 spielt einen
 Internetradio-Sender (Adresse im Text, MP3 über http/https,
-dekodiert mit `mpg123`), Art 13 hält an. Der
+dekodiert mit `mpg123`) oder mit `FILE:NAME.MP3`
+eine MP3-Datei von Laufwerk 3, Art 13 hält an. Art 16 (Netzdienst 1.8)
+schneidet mit: Byte 0 = 1 an (dahinter der Name des Senders), 0 aus, 2 nur
+fragen (ältere Dienste antworten −6); die Datei `SLAY0001.MP3` usw. landet
+auf Laufwerk 3, mit ID3-Tag (Sender, Datum, Titel mit Zeit). Ab `$0880`:
+`+0` 0 nichts, 1 nimmt auf, 2 Fehler, 3 spielt eine Datei, 4 Datei zu Ende,
+`+1` Zähler, `+$20` die Zeile für die App (bis 34 Zeichen). Ist eine Datei
+zu Ende, steht `$80` auf 4. Der
 Dienst legt 8-Bit-Samples mit 22 050 Hz in zwei Ringe im Fenster (links ab
 `$8000`, rechts ab `$C000`, je 16 KB) und meldet ab `$80`: `+0` Zustand
-(0 aus, 1 verbindet, 2 spielt, 3 Fehler), `+1` Zähler (ändert sich mit Titel
+(0 aus, 1 verbindet, 2 spielt, 3 Fehler, 4 Datei zu Ende), `+1` Zähler (ändert sich mit Titel
 und Zustand), `+2` Schreibzeiger, `+4` Lesezeiger (schreibt die App),
 `+6` kbit/s, `+8` laufender Titel, `+$40` Name des Senders oder Fehlertext. Dazu:
 ab `$0400` das Spektrum, 64 Felder zu 16 Bändern

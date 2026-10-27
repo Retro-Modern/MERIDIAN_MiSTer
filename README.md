@@ -453,7 +453,7 @@ playing in the background.
 | GLOWMINE | the workshop game |
 | CLOCK | clock and monthly calendar |
 | NOTES | a notepad, with open and save |
-| RADIO | internet radio: MP3 streams over http/https, with cover art and a spectrum |
+| RADIO | internet radio: MP3 streams over http/https, with cover art and a spectrum; records stations as MP3 files on drive 3 and plays them back |
 | PICTURES | shows BMP files (4 and 8 bits per pixel) from drives 1–3 |
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 | WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
