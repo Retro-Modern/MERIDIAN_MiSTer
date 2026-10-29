@@ -35,7 +35,9 @@ Internetradio (App RADIO, radio_dienst.py): Art 12 spielt den Sender mit der
 Adresse im Text (MP3, http/https) oder mit "FILE:NAME.MP3" eine Datei von
 Laufwerk 3, Art 13 haelt an, Art 16 schneidet mit (Byte 0: 1 an, 0 aus; die
 MP3-Datei landet auf Laufwerk 3); Stand ab $80, Mitschnitt ab $0880, Samples
-in zwei Ringen ab $8000 (links) und $C000 (rechts).
+in zwei Ringen ab $8000 (links) und $C000 (rechts). Art 23 (ab 1.9) wie 12,
+aber 32 kHz und 12 Bit: vier Ringe zu 8 KB, ab $8000 links grob, $A000 links
+fein, $C000 rechts grob, $E000 rechts fein.
 SID JAM (App JAM, sidjam_dienst.py): Art 20 mit einem Befehl als Text; Stand
 ab $2000, Auftraege fuer die ORGEL im Ring ab $4000, Samples wie beim Radio
 (Tabelle: sidjam/SCHNITTSTELLEN.md).
@@ -43,6 +45,11 @@ Nachrichten (App NEWS, nachrichten_dienst.py): Art 15 mit einem Befehl als
 Text (Tagesschau, heise online, Retro-Modern-Forum).
 Wetter (App WEATHER, wetter_dienst.py): Art 14 mit einem Befehl als Text;
 die Kurzform fuer die Menueleiste von HORIZONT schreibt der Dienst ab $22.
+Bilder (Apps PICTURES und PAINT, bild_dienst.py): Art 22 mit einem Befehl als
+Text - LADE wandelt JPG/PNG von Laufwerk 3 in eine BMP, die die App als
+~BILD.BMP liest; SICHERE legt, was sie als ~MALEN.BMP geschrieben hat, als
+PNG, JPG oder BMP ab; STAND meldet den Faden. ~BILD.BMP und ~MALEN.BMP liegen
+im Zwischenspeicher und stehen in keinem Verzeichnis.
 TAKTSTOCK Netz-Jam (takjam_dienst.py): Art 21 mit einem Befehl als Text; Stand
 ab $0300, Aenderungen in zwei Ringen ab $0400 und $0800 (taktstock/netz/NETZJAM.md).
 RADIO und SID JAM schreiben nur durch ein Tor ins Fenster (Klasse Tor): Es
@@ -88,6 +95,10 @@ try:
     import wetter_dienst                # Wetter (App WEATHER, Menueleiste)
 except ImportError:
     wetter_dienst = None
+try:
+    import bild_dienst                  # JPG/PNG fuer PICTURES und PAINT
+except ImportError:
+    bild_dienst = None
 try:
     import sidjam_dienst                # SID JAM (sidjam/dienst/)
 except ImportError:
@@ -254,6 +265,7 @@ class Dienst:
         self.radio = None               # Internetradio (radio_dienst), beim ersten Sender
         self.jam = None                 # SID JAM (sidjam_dienst), beim ersten Befehl
         self.takjam = None              # TAKTSTOCK Netz-Jam (takjam_dienst), beim ersten Befehl
+        self.bild = None                # Bilder fuer PICTURES und PAINT (bild_dienst), beim ersten Befehl
         self.wetter = wetter_dienst.Wetter(fenster, zu_meridian, ordner) if wetter_dienst else None
         self.nachrichten = nachrichten_dienst.Nachrichten(zu_meridian) if nachrichten_dienst else None
         self.tor_radio = Tor(fenster)
@@ -360,7 +372,7 @@ class Dienst:
             self.antworten(nr, len(q), zeile)
         elif art == 3:
             self.antworten(nr, self.status if k == 0 else self.kanaele[k].zustand())
-        elif art in (12, 13, 16):                   # Radio, Stopp, Mitschnitt
+        elif art in (12, 13, 16, 23):               # Radio, Stopp, Mitschnitt, Radio in 12 Bit
             if not radio_dienst:
                 return self.antworten(nr, -6, b"NO RADIO")
             self.jam_halten()                       # dieselben Sample-Ringe
@@ -393,6 +405,16 @@ class Dienst:
                 status, antwort = self.nachrichten.anfrage(text)
             except Exception as e:
                 status, antwort = 2, zu_meridian("ERROR: " + str(e))
+            self.antworten(nr, status, antwort)
+        elif art == 22:                             # Bilder (Apps PICTURES und PAINT)
+            if not bild_dienst:
+                return self.antworten(nr, -6, b"NO PICTURE SERVICE")
+            if not self.bild:
+                self.bild = bild_dienst.Bild(self.datei_pfad, lambda: self.dateien)
+            try:
+                status, antwort = self.bild.anfrage(text)
+            except Exception as e:
+                status, antwort = -1, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
         elif art == 20:
             if not sidjam_dienst:
@@ -576,6 +598,10 @@ class Dienst:
 
     def suchen(self, name83):
         name, end = name83[:8].decode("latin-1").strip(), name83[8:11].decode("latin-1").strip()
+        if bild_dienst and end == "BMP" and name in ("~BILD", "~MALEN"):
+            if not self.bild:                       # Zwischenspeicher von PICTURES und PAINT
+                self.bild = bild_dienst.Bild(self.datei_pfad, lambda: self.dateien)
+            return self.bild.pfad(bild_dienst.BILD if name == "~BILD" else bild_dienst.MALEN), name, end
         for kurz, e, n in self.verzeichnis():
             if kurz == name and e == end:
                 return os.path.join(self.dateien, n), name, end

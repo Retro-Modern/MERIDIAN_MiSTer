@@ -1442,9 +1442,20 @@ fragen (ältere Dienste antworten −6); die Datei `SLAY0001.MP3` usw. landet
 auf Laufwerk 3, mit ID3-Tag (Sender, Datum, Titel mit Zeit). Ab `$0880`:
 `+0` 0 nichts, 1 nimmt auf, 2 Fehler, 3 spielt eine Datei, 4 Datei zu Ende,
 `+1` Zähler, `+$20` die Zeile für die App (bis 34 Zeichen). Ist eine Datei
-zu Ende, steht `$80` auf 4. Der
-Dienst legt 8-Bit-Samples mit 22 050 Hz in zwei Ringe im Fenster (links ab
-`$8000`, rechts ab `$C000`, je 16 KB) und meldet ab `$80`: `+0` Zustand
+zu Ende, steht `$80` auf 4. Mit Art 12 legt der
+Dienst 8-Bit-Samples mit 22 050 Hz in zwei Ringe im Fenster (links ab
+`$8000`, rechts ab `$C000`, je 16 KB). Art 23 (Netzdienst 1.9) ist Art 12
+mit 32 000 Hz und 12 Bit: vier Ringe zu je 8 KB, `$8000` links grob,
+`$A000` links fein, `$C000` rechts grob, `$E000` rechts fein – grob das
+obere Byte des 16-Bit-Samples, fein die oberen vier Bit des unteren (0–15);
+RADIO spielt beide auf zwei ORGEL-Kanälen je Seite, fein mit einem
+Sechzehntel der Lautstärke. Ältere Dienste antworten auf Art 23 mit −6.
+Art 22 (Netzdienst 1.9) wandelt Bilder: `LADE NAME
+E N B H` macht aus JPG, PNG, GIF oder BMP auf Laufwerk 3 ein 8-Bit-BMP
+`~BILD.BMP` (Farben ab Platz E, N Stück, höchstens B × H), `SICHERE
+NAME.EXT` schreibt `~MALEN.BMP` als PNG oder JPG; `STAND` meldet 0 frei,
+1 beschäftigt, 2 fertig mit „B H“, 3 Fehlertext. Der Dienst meldet ab
+`$80`: `+0` Zustand
 (0 aus, 1 verbindet, 2 spielt, 3 Fehler, 4 Datei zu Ende), `+1` Zähler (ändert sich mit Titel
 und Zustand), `+2` Schreibzeiger, `+4` Lesezeiger (schreibt die App),
 `+6` kbit/s, `+8` laufender Titel, `+$40` Name des Senders oder Fehlertext. Dazu:
