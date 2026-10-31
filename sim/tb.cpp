@@ -44,6 +44,8 @@
 //
 // MERIDIAN_TON=datei.raw schneidet den Ton von ORGEL mit: Stereo, 16 Bit mit
 // Vorzeichen, 48 kHz (ffmpeg -f s16le -ar 48000 -ac 2 -i datei.raw).
+// MERIDIAN_TON_TEILER=n nimmt jeden n-ten Takt statt jeden 500. (24: 1 MHz,
+// so oft, wie ORGEL rechnet - fuer Messungen ohne Faltung).
 //
 // MERIDIAN_FILM="befehl" gibt jedes Bild (640x240, RGB24 roh) an einen Befehl
 // weiter, ab Bild MERIDIAN_FILM_AB (Standard 0), z. B.
@@ -359,6 +361,7 @@ int main(int argc, char** argv) {
     int film_ab = getenv("MERIDIAN_FILM_AB") ? atoi(getenv("MERIDIAN_FILM_AB")) : 0;
     long film_bilder = 0;
     long ton_werte = 0;
+    const long ton_teiler = getenv("MERIDIAN_TON_TEILER") ? atol(getenv("MERIDIAN_TON_TEILER")) : 500;
 
     Sdram sdram;
     Vmeridian_core* top = new Vmeridian_core;
@@ -701,7 +704,7 @@ int main(int argc, char** argv) {
             prev_hs = top->hsync; prev_vs = top->vsync;
         }
 
-        if (ton && t % 500 == 0) {                       // 24 MHz / 500 = 48 kHz
+        if (ton && t % ton_teiler == 0) {                // 24 MHz / 500 = 48 kHz
             int16_t w[2] = {(int16_t)top->audio_l, (int16_t)top->audio_r};
             fwrite(w, 2, 2, ton);
             ton_werte++;
@@ -714,7 +717,7 @@ int main(int argc, char** argv) {
         top->clk48 = 0;
         top->eval();
     }
-    if (ton) { fclose(ton); printf("Ton: %ld Werte (%.2f s)\n", ton_werte, ton_werte / 48000.0); }
+    if (ton) { fclose(ton); printf("Ton: %ld Werte (%.2f s)\n", ton_werte, ton_werte * ton_teiler / 24e6); }
     if (film) { pclose(film); printf("Film: %ld Bilder ab Bild %d\n", film_bilder, film_ab); }
 
     printf("Bilder: %d, CPU-Buszyklen: %ld (%.2f MHz)\n", frame, zyklen, zyklen / sekunden / 1e6);

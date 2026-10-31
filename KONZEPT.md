@@ -1454,7 +1454,13 @@ Art 22 (Netzdienst 1.9) wandelt Bilder: `LADE NAME
 E N B H` macht aus JPG, PNG, GIF oder BMP auf Laufwerk 3 ein 8-Bit-BMP
 `~BILD.BMP` (Farben ab Platz E, N Stück, höchstens B × H), `SICHERE
 NAME.EXT` schreibt `~MALEN.BMP` als PNG oder JPG; `STAND` meldet 0 frei,
-1 beschäftigt, 2 fertig mit „B H“, 3 Fehlertext. Der Dienst meldet ab
+1 beschäftigt, 2 fertig mit „B H“, 3 Fehlertext. Art 24 (Netzdienst 2.0)
+druckt: `DRUCKE QUELLE TITEL` macht aus einer
+Text- oder BMP-Datei auf Laufwerk 3 (`~DRUCK.TXT` und `~MALEN.BMP` liegen
+nur im Zwischenspeicher) ein PDF und schickt es per IPP an den Drucker aus
+`PRINTER.TXT` auf Laufwerk 3 oder den ersten, den Bonjour findet; `PDF
+QUELLE NAME.PDF TITEL` legt das PDF auf Laufwerk 3 ab, `DRUCKER` nennt den
+Drucker, `STAND` wie bei Art 22. Der Dienst meldet ab
 `$80`: `+0` Zustand
 (0 aus, 1 verbindet, 2 spielt, 3 Fehler, 4 Datei zu Ende), `+1` Zähler (ändert sich mit Titel
 und Zustand), `+2` Schreibzeiger, `+4` Lesezeiger (schreibt die App),

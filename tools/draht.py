@@ -50,6 +50,11 @@ Text - LADE wandelt JPG/PNG von Laufwerk 3 in eine BMP, die die App als
 ~BILD.BMP liest; SICHERE legt, was sie als ~MALEN.BMP geschrieben hat, als
 PNG, JPG oder BMP ab; STAND meldet den Faden. ~BILD.BMP und ~MALEN.BMP liegen
 im Zwischenspeicher und stehen in keinem Verzeichnis.
+Drucken (Apps NOTES und PAINT, druck_dienst.py): Art 24 mit einem Befehl als
+Text - DRUCKE QUELLE schickt Text (~DRUCK.TXT), Bild (~MALEN.BMP) oder die
+Zeilenliste von WRITE (~DRUCK.WRL) als PDF
+an den Netzwerkdrucker (IPP; PRINTER.TXT auf Laufwerk 3 oder Bonjour), PDF
+QUELLE NAME.PDF legt das PDF auf Laufwerk 3 ab; STAND meldet den Faden.
 TAKTSTOCK Netz-Jam (takjam_dienst.py): Art 21 mit einem Befehl als Text; Stand
 ab $0300, Aenderungen in zwei Ringen ab $0400 und $0800 (taktstock/netz/NETZJAM.md).
 RADIO und SID JAM schreiben nur durch ein Tor ins Fenster (Klasse Tor): Es
@@ -99,6 +104,10 @@ try:
     import bild_dienst                  # JPG/PNG fuer PICTURES und PAINT
 except ImportError:
     bild_dienst = None
+try:
+    import druck_dienst                 # Drucken fuer NOTES und PAINT
+except ImportError:
+    druck_dienst = None
 try:
     import sidjam_dienst                # SID JAM (sidjam/dienst/)
 except ImportError:
@@ -266,6 +275,7 @@ class Dienst:
         self.jam = None                 # SID JAM (sidjam_dienst), beim ersten Befehl
         self.takjam = None              # TAKTSTOCK Netz-Jam (takjam_dienst), beim ersten Befehl
         self.bild = None                # Bilder fuer PICTURES und PAINT (bild_dienst), beim ersten Befehl
+        self.druck = None               # Drucken (druck_dienst), beim ersten Befehl
         self.wetter = wetter_dienst.Wetter(fenster, zu_meridian, ordner) if wetter_dienst else None
         self.nachrichten = nachrichten_dienst.Nachrichten(zu_meridian) if nachrichten_dienst else None
         self.tor_radio = Tor(fenster)
@@ -413,6 +423,16 @@ class Dienst:
                 self.bild = bild_dienst.Bild(self.datei_pfad, lambda: self.dateien)
             try:
                 status, antwort = self.bild.anfrage(text)
+            except Exception as e:
+                status, antwort = -1, zu_meridian("ERROR: " + str(e))
+            self.antworten(nr, status, antwort)
+        elif art == 24:                             # Drucken (Apps NOTES, PAINT, WRITE)
+            if not druck_dienst:
+                return self.antworten(nr, -6, b"NO PRINT SERVICE")
+            if not self.druck:
+                self.druck = druck_dienst.Druck(self.datei_pfad, lambda: self.dateien)
+            try:
+                status, antwort = self.druck.anfrage(text)
             except Exception as e:
                 status, antwort = -1, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
@@ -602,6 +622,11 @@ class Dienst:
             if not self.bild:                       # Zwischenspeicher von PICTURES und PAINT
                 self.bild = bild_dienst.Bild(self.datei_pfad, lambda: self.dateien)
             return self.bild.pfad(bild_dienst.BILD if name == "~BILD" else bild_dienst.MALEN), name, end
+        if druck_dienst and end in ("TXT", "WRL", "BMP") and name == "~DRUCK":
+            if not self.druck:                      # Zwischenspeicher fuer NOTES, WRITE und CALC (Drucken)
+                self.druck = druck_dienst.Druck(self.datei_pfad, lambda: self.dateien)
+            return self.druck.pfad({"TXT": druck_dienst.DRUCK, "WRL": druck_dienst.DRUCK_WRL,
+                                    "BMP": getattr(druck_dienst, "DRUCK_BMP", "druck.bmp")}[end]), name, end
         for kurz, e, n in self.verzeichnis():
             if kurz == name and e == end:
                 return os.path.join(self.dateien, n), name, end

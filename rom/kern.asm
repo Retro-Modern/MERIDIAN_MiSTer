@@ -2220,7 +2220,14 @@ nmi
 	sei
 	clc
 	xce
-	stz basic_da                ; ein fremdes Programm: BASIC neu einrichten
+	; Erst direkte Seite und Datenbank auf 0, dann speichern: Das
+	; unterbrochene Programm kann beide verstellt haben. HORIZONT arbeitet
+	; mit D = $4800, das DOS (Sprung ueber K_NMI) mit $1700. Stand
+	; "stz basic_da" vor tcd, loeschte es $00:480C/480D - mitten in der eben
+	; von BOTE geladenen Engine, die dann auf ein BRK lief: schwarzer Schirm
+	; bei jedem Fernstart aus HORIZONT. Ebenso traf
+	; "sta BENUTZER_IRQ" vor plb die Datenbank des Unterbrochenen.
+	; basic_da ist ein Byte: in 8 Bit loeschen, $0D daneben ist ein_s.
 	rep #$38
 	.al
 	.xl
@@ -2228,12 +2235,15 @@ nmi
 	txs
 	lda #$0000
 	tcd
-	lda #irq_standard           ; Haken zuruecksetzen
-	sta BENUTZER_IRQ
 	#akku8
 	lda #0
 	pha
 	plb
+	stz basic_da                ; ein fremdes Programm: BASIC neu einrichten
+	#akku16
+	lda #irq_standard           ; Haken zuruecksetzen
+	sta BENUTZER_IRQ
+	#akku8
 	stz SYS_STEUER              ; Spiegel aus (BASIC laeuft nicht mehr)
 	stz blink_frei              ; ein Programm laeuft: Cursor still
 	lda #$01                    ; nur Bildende-Interrupt
@@ -2286,8 +2296,11 @@ nmi
 	pea _zurueck-1
 	jml [sprung]
 _zurueck
-	rep #$10
-	.xl
+	rep #$30                    ; dasselbe auf dem Rueckweg: kommt das Programm
+	.al                         ; mit eigener direkter Seite zurueck, schrieben
+	.xl                         ; anzeige_zuruecksetzen und basic_kalt (basic_da)
+	lda #$0000                  ; sonst dorthin
+	tcd
 	#akku8
 	lda #0
 	pha

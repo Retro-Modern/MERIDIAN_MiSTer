@@ -30,7 +30,7 @@ case "$1" in
 		ssh_m 'mkdir -p /media/fat/linux/meridian'
 		# erst anhalten: laufende Programme (sidkern, sidton) lassen sich nicht ueberschreiben
 		ssh_m 'kill $(cat /tmp/draht.pid) 2>/dev/null; sleep 0.5'
-		scp -q draht.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py disk.py ../rom/zeichensatz.bin \
+		scp -q draht.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py bild_dienst.py druck_dienst.py disk.py ../rom/zeichensatz.bin \
 			../sidjam/dienst/sidjam_dienst.py ../sidjam/dienst/orgelwandler.py ../sidjam/dienst/hvsc_index.py \
 			../taktstock/netz/takjam_dienst.py \
 			$MISTER:/media/fat/linux/meridian/ 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true
@@ -40,6 +40,9 @@ case "$1" in
 		# reSID fuer den Klang "Original" (sidjam/ton/bauen.sh arm)
 		SIDTON=${SIDTON:-../sidjam/ton/bau/sidton-linux-armv7}
 		[ -f $SIDTON ] && scp -q $SIDTON $MISTER:/media/fat/linux/meridian/sidton 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true
+		# Bilder fuer PICTURES und PAINT (bildwandler/bauen.sh arm)
+		BILDWANDLER=${BILDWANDLER:-../bildwandler/bau/bildwandler-linux-armv7}
+		[ -f $BILDWANDLER ] && scp -q $BILDWANDLER $MISTER:/media/fat/linux/meridian/bildwandler 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true
 		# (nicht per ps suchen: die Befehlszeile dieser Sitzung enthaelt selbst
 		# den Namen des Dienstes)
 		ssh_m 'kill $(cat /tmp/draht.pid) 2>/dev/null; sleep 0.3; cd /media/fat/linux/meridian; setsid nohup python3 -u draht.py > /tmp/draht.log 2>&1 < /dev/null & echo $! > /tmp/draht.pid; sleep 1; cat /tmp/draht.log'

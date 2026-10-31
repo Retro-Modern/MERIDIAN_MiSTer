@@ -136,7 +136,9 @@ start defaults to the load address, `--kein-start` only loads it). `.MER`
 files carry both addresses in their 16-byte header; `tools/mer.py` builds
 them. The program is called with `JSL`, an `RTL` returns to `READY.`.
 Several files are sent one after the other, the program usually last.
-Nothing is written while another core is running.
+Nothing is written while another core is running. Since release 20261030
+this also works while the HORIZONT desktop is running (before, the screen
+stayed black unless you went to BASIC with `Esc` first).
 
 Behind it, a few lines of Python on the MiSTer write the file into a
 mailbox in the DDR3 memory; the BOTE chip in the core notices, pauses the
@@ -452,10 +454,11 @@ playing in the background.
 | BASIC | back to BASIC (`Esc` does the same) |
 | GLOWMINE | the workshop game |
 | CLOCK | clock and monthly calendar |
-| NOTES | a notepad, with open and save |
+| NOTES | a notepad, with open, save and print |
 | RADIO | internet radio: MP3 streams over http/https in 32 kHz and 12 bits, with cover art and a spectrum; records stations as MP3 files on drive 3 and plays them back |
 | PICTURES | shows BMP files (4 and 8 bits per pixel) from drives 1–3, and JPG, PNG and GIF from drive 3 |
-| PAINT | a paint program: 320 × 200 with 208 colours, pen, lines, boxes, ovals, fill; opens and saves BMP, PNG and JPG |
+| PAINT | a paint program: 320 × 200 with 208 colours, pen, lines, boxes, ovals, fill; opens and saves BMP, PNG and JPG, prints |
+| KONTOR | a folder with four office apps (since 2.4) – **WRITE**, a word processor with an A4 page view, three fonts in four sizes, styles, pictures and mail merge; **CALC**, a spreadsheet with 64 × 999 cells, formulas, CSV and bar, line and pie charts; **FILE**, a card file with free card design, sort, filter, CSV and labels; **DRAW**, vector drawing with shapes, text, groups and zoom. All four print to a network printer or to a PDF on drive 3 |
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 | WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
 | NEWS | news from tagesschau.de, heise online and the Retro-Modern forum, with the full article |
@@ -466,7 +469,7 @@ playing in the background.
 HORIZONT needs the SDRAM module and the core from release 20261010 on.
 
 **Download and setup:** the cartridge `HORIZONT.MOD` and the network service
-package for RADIO, SID JAM, WEATHER, NEWS and the net jam are on
+package for RADIO, SID JAM, WEATHER, NEWS, printing and the net jam are on
 [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html).
 Pictures and setup: [retro-modern.net/en/meridian.html#horizont](https://retro-modern.net/en/meridian.html#horizont).
 SID JAM also plays in the browser:
