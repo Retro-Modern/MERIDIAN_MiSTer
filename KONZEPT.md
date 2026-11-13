@@ -328,7 +328,7 @@ doppelt groß mit Kontur auf einer Zeile: rund 1380 Takte.
 | `$05` | IRQ_EN | gleiche Bits: Interrupt freigeben |
 | `$08/$09` | JOY1 | Bit 0 rechts, 1 links, 2 runter, 3 hoch, 4–9 Feuer A–D, Start, Auswahl |
 | `$0A/$0B` | JOY2 | wie JOY1 |
-| `$0C` | LAYOUT | Bit 0: Mac-Tastatur (MiSTer-Menü) |
+| `$0C` | LAYOUT | Bit 0: deutsche Mac-Tastatur, Bit 2: US-Tastatur (beides MiSTer-Menü, seit 20261113 `O[11:10]`); Bit 1: MEGA65-Tastatur (nur der MEGA65-Port) |
 | `$10–$13` | UHR | Mikrosekunden seit dem Start (32 Bit); Schreiben auf `$10` friert den Stand zum Lesen ein |
 | `$14/$15` | TIMER A | Schreiben = Startwert, Lesen = Zählerstand |
 | `$16` | TA_STEUER | Bit 0: läuft, Bit 1: nur einmal |
@@ -404,7 +404,13 @@ Programm per `JSL`. Kehrt es mit `RTL` zurück, erscheint wieder „READY.“.
 | 12–15 | Länge der Daten |
 
 **Postfach im DDR3** (64-Bit-Wörter): Wort 0 = Folgenummer (wird als Letztes
-geschrieben), Wort 1–2 = MER-Kopf, ab Wort 3 die Daten.
+geschrieben), Wort 1–2 = MER-Kopf, ab Wort 3 die Daten. **Es fasst knapp
+1 MB:** ab `$3E100000` liegt das DRAHT-Fenster, in das `draht.py` alle 50 ms
+Herzschlag und Ablage-Stand schreibt. Eine längere Datei reichte hinein, und
+BOTE kopierte DRAHTs Bytes mit (gefunden am 05.11.2026 mit einem 13-MB-Paket
+von meridian-scummvm: Palette und Skript bei `$14:0000` kaputt, je nach
+Zeitpunkt). `senden.py` schickt größere Dateien darum in Stücken zu 960 KB;
+nur das letzte trägt den Autostart.
 
 **Module** (Etappe 10) kommen über „Insert cartridge“ (`*.MOD`, Menü-Index 2).
 BOTE legt die Datei ohne Kopf ab `$40:0000` in den Zusatzspeicher (bis
@@ -928,7 +934,10 @@ Programmende schaltet er ORGEL still. `?FEHLER` im Monitor klingelt.
 `$1E` ↑, `$1F` ↓, `$7F` Entf.
 
 **Tastatur:** deutsches Layout mit Umlauten und ß, AltGr-Zeichen nach PC-
-oder Mac-Belegung (Umschalter im MiSTer-Menü). Tastenwiederholung nach
+oder Mac-Belegung, oder US-Layout (Wahl im MiSTer-Menü). Die US-Tabellen
+liegen im System-ROM bei `$FF:7F00` (normal) und `$FF:7F80` (Umschalt), weil
+das Kern-ROM voll ist; mit US geben Alt + a/o/u/s die Umlaute und ß. `KEY()`
+folgt der gewählten Belegung. Tastenwiederholung nach
 25 Bildern, dann alle 3 Bilder (USB-Tastaturen wiederholen nicht selbst).
 
 **Bildschirmeditor** wie beim C64: Der Cursor fährt frei über den Schirm,
@@ -1483,6 +1492,31 @@ findet er nichts, zeichnet er ein Senderbild. Die Browser-Ablage
 | `+4`, `+8` | Bytes bisher, Gesamtgröße (je 32 Bit) |
 | `+12`, `+25` | Name am MERIDIAN (8.3), Absender (je mit 0 dahinter) |
 | `+42` | Adresse der Seite, z. B. `192.168.178.92:816` |
+
+**Art 25, LEITUNG** (`tools/leitung_dienst.py`, seit 07.11.2026): eine
+rohe TCP-Verbindung für Programme mit eigenem Binärprotokoll, zuerst
+HANSE&HIEBE (`meridian/hanse/`). NET/CONNECT taugt dafür nicht, weil es
+Zeilen macht, Umlaute übersetzt und Telnet-Folgen wegwirft. Befehle als
+Text: `AUF HOST:PORT`, `ZU`, `STAND`. Ältere Dienste antworten −6. Der
+Stand liegt ab `$FD:0300` (D schreibt der Dienst, M das Programm):
+
+| | |
+|---|---|
+| `+0` D | 0 zu, 1 verbindet, 2 offen, 3 Gegenseite hat getrennt, 4 Verbinden ging nicht, 5 Programm schweigt |
+| `+1` D | Folge: zählt bei jedem Zustandswechsel |
+| `+2` D, `+4` M | Eingang: Schreib- und Lesezeiger (16 Bit, Ring `$0400`, 2 KB) |
+| `+6` M, `+8` D | Ausgang: Schreib- und Lesezeiger (16 Bit, Ring `$0C00`, 1 KB) |
+| `+$0A` M | Herzschlag: das Programm zählt ihn je Bild weiter |
+| `+$20` D | Meldung, 31 Zeichen und 0 |
+
+Die Zeiger gehen nicht in einem Zug über den Bus: Wer einen Zeiger der
+Gegenseite liest, liest ihn zweimal, bis beide Male dasselbe herauskommt;
+geschrieben wird erst der Inhalt, dann der Zeiger. Steht der Herzschlag
+länger als 3 s, nachdem er einmal gezählt hat, trennt der Dienst
+(Zustand 5), damit ein Reset keine Verbindung offen lässt. Im Emulator
+(`draht.py --datei`) sind es 120 s, weil die Maschine dort zwischen zwei
+Werkzeugaufrufen steht. Die Leitung teilt sich `$0300–$0FFF` mit dem
+Spektrum des Radios und dem Netz-Jam von TAKTSTOCK; `AUF` hält beide an.
 
 | Taste | in ATLAS |
 |---|---|

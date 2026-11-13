@@ -62,6 +62,24 @@ M65_E0MEGA = {0x4A: "\\"}
 # Umschalt + F1/F3/F5/F7/F9/F11/F13 = F2/F4/.../F14 (Scancodes)
 M65_FTASTEN = {0x05: 0x06, 0x04: 0x0C, 0x03: 0x0B, 0x83: 0x0A, 0x01: 0x09, 0x78: 0x07, 0x08: 0x10}
 
+# US-Belegung (PFORTE $C10C Bit 2, MiSTer-Menue "Keyboard: US"): nur die
+# Tasten, die anders beschriftet sind als im deutschen Layout; alles andere
+# (Buchstaben, Ziffern, Ziffernblock, Steuertasten) kommt aus GRUND. Die
+# Tabellen liegen im System-ROM bei $FF:7F00 und $FF:7F80, weil im Kern-ROM
+# nur noch ein paar Dutzend Bytes frei sind. Umlaute gibt es mit Alt + a/o/u/s
+# (dieselben Listen wie beim MEGA65). 0x61 ist die Zusatztaste der ISO-
+# Tastaturen, die es auf US-Tastaturen nicht gibt: dort wie die Taste
+# ueber Return.
+US = {
+    0x0E: ("`", "~"), 0x1E: ("2", "@"), 0x26: ("3", "#"), 0x36: ("6", "^"),
+    0x3D: ("7", "&"), 0x3E: ("8", "*"), 0x46: ("9", "("), 0x45: ("0", ")"),
+    0x4E: ("-", "_"), 0x55: ("=", "+"),
+    0x35: ("y", "Y"), 0x54: ("[", "{"), 0x5B: ("]", "}"),
+    0x4C: (";", ":"), 0x52: ("'", '"'), 0x5D: ("\\", "|"),
+    0x61: ("\\", "|"), 0x1A: ("z", "Z"),
+    0x41: (",", "<"), 0x49: (".", ">"), 0x4A: ("/", "?"),
+}
+
 ALTGR_PC = {0x15: "@", 0x3D: "{", 0x3E: "[", 0x46: "]", 0x45: "}", 0x4E: "\\",
             0x5B: "~", 0x61: "|"}
 OPTION_MAC = {0x4B: "@", 0x2E: "[", 0x36: "]", 0x3D: "|", 0x3E: "{", 0x46: "}",
@@ -123,6 +141,21 @@ def main():
         f.write("\n\n".join(teile) + "\n")
     print(f"rom/tastatur.inc: {len(GRUND)} Tasten")
     main_m65()
+    main_us()
+
+
+def main_us():
+    us = dict(GRUND)
+    us.update(US)
+    teile = [
+        "; Automatisch erzeugt von tools/tastatur.py - nicht von Hand aendern.",
+        "; US-Belegung, im System-ROM bei $FF:7F00 (normal) und $FF:7F80 (Umschalt)",
+        tabelle("tab_us_normal", {c: n for c, (n, s) in us.items()}),
+        tabelle("tab_us_shift", {c: s for c, (n, s) in us.items()}),
+    ]
+    ziel = os.path.join(os.path.dirname(ZIEL), "tastatur_us.inc")
+    with open(ziel, "w", encoding="ascii") as f:
+        f.write("\n\n".join(teile) + "\n")
 
 
 if __name__ == "__main__":

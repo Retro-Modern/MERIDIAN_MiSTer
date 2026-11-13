@@ -50,6 +50,7 @@ module meridian_core
 	input  [15:0] joy1,
 	input         layout_mac,
 	input         layout_m65,   // MEGA65-Tastatur (Bit 1 von PFORTE $0C; MiSTer: 0)
+	input         layout_us,    // US-Tastatur (Bit 2 von PFORTE $0C)
 
 	input         ioctl_download,   // Laden aus dem MiSTer-Menue
 	input   [7:0] ioctl_index,      // 1 Programm (*.MER), 2 Modul (*.MOD)
@@ -436,6 +437,7 @@ pforte pforte
 	.joy1(joy1),
 	.layout_mac(layout_mac),
 	.layout_m65(layout_m65),
+	.layout_us(layout_us),
 	.reg_addr(io_a[7:0]),
 	.reg_din(io_d),
 	.reg_dout(pfo_dout),

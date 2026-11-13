@@ -12,7 +12,9 @@
 // {RUECK} {CLR} {EINFG} {ESC} {STRG1}..{STRG9}, {F1}..{F12} {TAB} {BILDHOCH}
 // {BILDRUNTER} {ENDE}, {WARTE} (eine halbe Sekunde); Vorsatz U: haelt
 // Umschalt, S: Strg, A: Alt (z. B. {U:HOCH}, {S:RECHTS}, {A:RUNTER});
-// Strg+Buchstabe als {STRGc} - {S:C} sendet nichts.
+// Strg+Buchstabe als {STRGc} - {S:C} sendet nichts. {Kxx} sendet den
+// Scancode xx (hex) roh, unabhaengig vom Layout (auch mit U:/A:).
+// MERIDIAN_US=1 stellt die Tastatur auf US (PFORTE $0C Bit 2).
 //
 // MERIDIAN_MENUE=datei.mer laedt ab Bild MERIDIAN_MENUE_AB (Standard 60)
 // wie aus dem MiSTer-Menue (ioctl, WIDE): ein Wort alle MERIDIAN_MENUE_ABSTAND
@@ -37,7 +39,20 @@
 //
 // MERIDIAN_SENDEN=datei.mer legt ab Bild MERIDIAN_SENDEN_AB (Standard 60)
 // ein Programm ins nachgebildete DDR3-Postfach, wie tools/senden.py es auf
-// dem MiSTer tut.
+// dem MiSTer tut. Mehrere Dateien mit Komma: je MERIDIAN_SENDEN_ABSTAND
+// Bilder eine (Standard 12).
+//
+// MERIDIAN_SENDEN_SCHNELL=n[:m]: die Dateien so schnell, wie BOTE sie nimmt -
+// die erste ab Bild n (das ROM ist nach Bild 1 fertig), jede weitere, sobald
+// BOTE die vorige abgeholt hat (danach liest er wieder die Folgenummer).
+// Die letzte (die Engine) kommt zu Beginn von Bild m (Vorgabe 48; fest, damit
+// Laeufe verschiedener Bauten gleich weit versetzt sind - erst spaeter, wenn
+// BOTE bis dahin nicht fertig ist), und von da an zaehlen
+// die Bilder so, als waeren alle im festen Abstand gekommen: Bildnummern,
+// Fotos, Maus, Tippen, Joystick, Abzuege, Schreibspur und Ton (vorn mit
+// Stille aufgefuellt) passen zu denselben Folgen, nur werden die Bilder
+// dazwischen nicht gerechnet. Vorher prueft die Testbench, dass die Daten
+// unversehrt im Zusatzspeicher stehen.
 //
 // MERIDIAN_ABZUG="von-bis=datei,..." schreibt am Ende Bereiche des
 // Zusatzspeichers (hex, 24 Bit) in Dateien.
@@ -63,6 +78,7 @@
 #include <vector>
 #include <deque>
 #include <cstring>
+#include <cctype>
 #include <ctime>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -136,6 +152,11 @@ static std::deque<Taste> tipp_folge(const char* text) {
                 {"F6", 0x0B, 0}, {"F7", 0x83, 0}, {"F8", 0x0A, 0}, {"F9", 0x01, 0}, {"F10", 0x09, 0},
                 {"F11", 0x78, 0}, {"F12", 0x07, 0}, {"TAB", 0x0D, 0}, {"BILDHOCH", 0x7D, 1},
                 {"BILDRUNTER", 0x7A, 1}, {"ENDE", 0x69, 1}, {"RETURN", 0x5A, 0}, {"WARTE", -1, 0}};
+            if (w.size() == 3 && w[0] == 'K' && isxdigit(w[1]) && isxdigit(w[2])) {
+                // {Kxx}: roher Scancode xx (hex), z. B. fuer die US-Belegung
+                t = {(int)strtol(w.c_str() + 1, nullptr, 16), 0, um, st, al};
+                f.push_back(t); p = e; continue;
+            }
             bool gefunden = false;
             for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st, al}; gefunden = true; }
             if (gefunden) { f.push_back(t); p = e; continue; }
@@ -343,6 +364,16 @@ int main(int argc, char** argv) {
     int senden_abstand = getenv("MERIDIAN_SENDEN_ABSTAND") ? atoi(getenv("MERIDIAN_SENDEN_ABSTAND")) : 12;
     int nochmal_ab = getenv("MERIDIAN_SENDEN_NOCHMAL") ? atoi(getenv("MERIDIAN_SENDEN_NOCHMAL")) : -1;
     bool gesendet = false;
+    // MERIDIAN_SENDEN_SCHNELL: nach dem Abholen senden, dann die Bildnummern
+    // auf den festen Abstand vorstellen (siehe oben)
+    int schnell_ab = -1, schnell_engine = 48;
+    if (getenv("MERIDIAN_SENDEN_SCHNELL")) sscanf(getenv("MERIDIAN_SENDEN_SCHNELL"), "%d:%d", &schnell_ab, &schnell_engine);
+    int abholen = 0;                 // 1: gelegt, BOTE hat den Kopf noch nicht gelesen; 2: liest
+    bool abgefragt = false;          // BOTE hat die Folgenummer seit dem Start gelesen
+    bool vorgestellt = false;
+    int gespart = 0;                 // so viele Bilder weniger gerechnet
+    uint64_t verschub = 0;           // ... in Takten (fuer den Ton)
+    int bild_vorher = -1;
     std::deque<std::pair<uint64_t, uint32_t>> ddr_antworten;   // (Takt, Wortadresse)
     // DRAHT-Fenster: 64 KB ab Wort $07C20000, auf Wunsch aus einer Datei
     const uint32_t FENSTER = 0x07C20000;
@@ -401,6 +432,7 @@ int main(int argc, char** argv) {
         }
     }
     top->layout_mac = 0;
+    top->layout_us = getenv("MERIDIAN_US") ? 1 : 0;   // US-Tastatur (PFORTE $0C Bit 2)
     top->ioctl_download = 0;
     top->ioctl_index = getenv("MERIDIAN_MENUE_INDEX") ? atoi(getenv("MERIDIAN_MENUE_INDEX")) : 1;
     top->modul_aus = getenv("MERIDIAN_MODUL_AUS") ? 1 : 0;
@@ -458,7 +490,7 @@ int main(int argc, char** argv) {
         }
 
         // Tippen: ab dem Startbild alle Tasten als Ereignisfolge einplanen
-        if (frame == tipp_ab && !tippen.empty() && ereignisse.empty()) {
+        if (frame >= tipp_ab && !tippen.empty() && ereignisse.empty()) {
             uint64_t z = t;
             const uint64_t MS = getenv("MERIDIAN_TIPP_MS") ? atoi(getenv("MERIDIAN_TIPP_MS")) : 30;
             const uint64_t H = TAKT * MS / 1000;   // halten, dann Pause
@@ -517,13 +549,67 @@ int main(int argc, char** argv) {
         }
 
         // Programm ins Postfach legen: Daten, Kopf, zuletzt die Folgenummer
-        if (naechste < sendungen.size() && frame == senden_ab + (int)naechste * senden_abstand) {
+        bool bildanfang = frame != bild_vorher;
+        bild_vorher = frame;
+        bool legen = false;
+        if (naechste < sendungen.size()) {
+            if (schnell_ab < 0) legen = frame == senden_ab + (int)naechste * senden_abstand;
+            else if (abholen == 0 && abgefragt && frame >= schnell_ab)
+                legen = naechste + 1 < sendungen.size() || (bildanfang && frame >= schnell_engine);
+        }
+        if (legen && schnell_ab >= 0 && naechste + 1 == sendungen.size() && !vorgestellt) {
+            vorgestellt = true;
+            int soll = senden_ab + (int)naechste * senden_abstand;   // so kaeme sie im festen Abstand
+            // die Daten davor muessen unversehrt im Zusatzspeicher stehen
+            long falsch = 0, geprueft = 0;
+            for (size_t i = 0; i < naechste; i++) {
+                const auto& s = sendungen[i];
+                uint32_t lade = s[4] | s[5] << 8 | s[6] << 16;
+                if (lade < 0x040000) continue;                       // Chip-RAM: sieht die Testbench nicht
+                for (size_t j = 16; j < s.size(); j++, geprueft++) {
+                    uint32_t x = lade + (uint32_t)(j - 16);
+                    uint16_t w = sdram.mem[(x >> 1) & (sdram.mem.size() - 1)];
+                    if (((x & 1) ? (w >> 8) : (w & 0xFF)) != s[j]) falsch++;
+                }
+            }
+            printf("Bild %d: %ld Bytes der Daten im Zusatzspeicher geprueft, %ld falsch\n", frame, geprueft, falsch);
+            if (frame > schnell_engine)
+                printf("Warnung: BOTE war erst in Bild %d fertig, nicht in Bild %d - die Bildnummern sind anders versetzt\n",
+                       frame, schnell_engine);
+            if (soll > frame) {
+                gespart = soll - frame;
+                uint64_t lang = vs_abstand ? vs_abstand : (uint64_t)(TAKT / 59.95);   // Takte je Bild
+                uint64_t v0 = t + verschub;
+                verschub += gespart * lang;
+                if (ton) {                                           // Ton: die Luecke ist still
+                    uint64_t v1 = t + verschub;
+                    uint64_t n = (v1 + ton_teiler - 1) / ton_teiler - (v0 + ton_teiler - 1) / ton_teiler;
+                    int16_t still[2] = {0, 0};
+                    for (uint64_t k = 0; k < n; k++) fwrite(still, 2, 2, ton);
+                    ton_werte += n;
+                }
+                takte = takte > gespart * lang + t ? takte - gespart * lang : t + 1;
+                for (int b : bilder)
+                    if (b >= frame && b < soll) printf("Warnung: Bild %d liegt im uebersprungenen Stueck\n", b);
+                for (int b : abzug_bei)
+                    if (b >= frame && b < soll) printf("Warnung: der Abzug in Bild %d liegt im uebersprungenen Stueck\n", b);
+                if (!maus.empty() && maus.front().bild < soll)
+                    printf("Warnung: Mausereignis fuer Bild %d liegt im uebersprungenen Stueck\n", maus.front().bild);
+                if (film && film_ab < soll)
+                    printf("Warnung: der Film beginnt im uebersprungenen Stueck (Bild %d)\n", film_ab);
+                printf("Bild %d: alle Daten abgeholt - weiter als Bild %d (%d Bilder gespart)\n", frame, soll, gespart);
+                frame = soll;
+                bild_vorher = frame;
+            }
+        }
+        if (legen) {
             senden = sendungen[naechste++];
             if (ddr.size() < senden.size() + 64) ddr.resize(senden.size() + 64, 0);
             for (size_t i = 16; i < senden.size(); i++) ddr[24 + i - 16] = senden[i];
             for (int i = 0; i < 16; i++) ddr[8 + i] = senden[i];
             ddr[0]++;
             gesendet = true;
+            abholen = 1;
             printf("Bild %d: Datei %zu ins Postfach gelegt (%zu Bytes)\n", frame, naechste, senden.size() - 16);
         }
         if (gesendet && frame == nochmal_ab) {           // noch einmal, waehrend es laeuft:
@@ -652,7 +738,14 @@ int main(int argc, char** argv) {
             ddr_antworten.pop_front();
             }
         }
-        if (top->ddr_rd) ddr_antworten.push_back({t + 8, top->ddr_addr});
+        if (top->ddr_rd) {
+            ddr_antworten.push_back({t + 8, top->ddr_addr});
+            // BOTE liest die Folgenummer (Wort 0) reihum, bei einer neuen
+            // dann den Kopf (Wort 1) und die Daten - liest er danach wieder
+            // die Folgenummer, ist die Datei abgeholt
+            if (top->ddr_addr == POSTFACH) { abgefragt = true; if (abholen == 2) abholen = 0; }
+            else if (top->ddr_addr == POSTFACH + 1 && abholen == 1) abholen = 2;
+        }
         if (top->ddr_we && top->ddr_addr >= FENSTER && top->ddr_addr < FENSTER + 8192) {
             for (int i = 0; i < 8; i++)
                 if ((top->ddr_be >> i) & 1)
@@ -704,7 +797,7 @@ int main(int argc, char** argv) {
             prev_hs = top->hsync; prev_vs = top->vsync;
         }
 
-        if (ton && t % ton_teiler == 0) {                // 24 MHz / 500 = 48 kHz
+        if (ton && (t + verschub) % ton_teiler == 0) {   // 24 MHz / 500 = 48 kHz
             int16_t w[2] = {(int16_t)top->audio_l, (int16_t)top->audio_r};
             fwrite(w, 2, 2, ton);
             ton_werte++;
@@ -720,10 +813,12 @@ int main(int argc, char** argv) {
     if (ton) { fclose(ton); printf("Ton: %ld Werte (%.2f s)\n", ton_werte, ton_werte * ton_teiler / 24e6); }
     if (film) { pclose(film); printf("Film: %ld Bilder ab Bild %d\n", film_bilder, film_ab); }
 
-    printf("Bilder: %d, CPU-Buszyklen: %ld (%.2f MHz)\n", frame, zyklen, zyklen / sekunden / 1e6);
+    double gerechnet = (double)takte / TAKT;               // ohne das uebersprungene Stueck
+    if (gespart) printf("Bilder: %d (gerechnet %d), CPU-Buszyklen: %ld (%.2f MHz)\n", frame, frame - gespart, zyklen, zyklen / gerechnet / 1e6);
+    else printf("Bilder: %d, CPU-Buszyklen: %ld (%.2f MHz)\n", frame, zyklen, zyklen / gerechnet / 1e6);
     if (vs_abstand)
         printf("Bildfrequenz: %.3f Hz, Zeilenfrequenz: %.1f Hz\n",
-               (double)TAKT / vs_abstand, hs_pulse / sekunden);
+               (double)TAKT / vs_abstand, hs_pulse / gerechnet);
     if (sdram.lesen || sdram.schreiben || sdram.fehler)
         printf("SDRAM: %ld gelesen, %ld geschrieben, %ld aufgefrischt, %ld Fehler\n",
                sdram.lesen, sdram.schreiben, sdram.auffr, sdram.fehler);

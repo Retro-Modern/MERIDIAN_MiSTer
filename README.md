@@ -61,9 +61,11 @@ really runs at 50.3 Hz (NTSC: 59.95 Hz), but over HDMI the MiSTer keeps its
 own output rate unless `vsync_adjust=1` or `2` is set in `MiSTer.ini` – then
 it follows the core, if the display accepts 50 Hz.
 
-**Keyboard:** the layout is German (QWERTZ, with umlauts), as a PC or Mac
-variant (OSD *Keyboard*). `Esc` stops a program, `Shift+Home` clears the
-screen.
+**Keyboard:** choose the layout in the OSD under *Keyboard*: *US*, *German
+PC* or *German Mac* (QWERTZ, with umlauts). With the US layout, Alt + a, o,
+u, s types ä, ö, ü, ß. `Esc` stops a program, `Shift+Home` clears the screen.
+The US layout is new in core 20261113; set it once after updating – the
+keyboard setting moved to a new place in the OSD and starts as *German PC*.
 
 ## BASIC
 
@@ -185,7 +187,8 @@ computer: copy them into `games/MERIDIAN/files` (card reader, network share,
 FTP, or the USB drive), and `DRIVE 3` / `DIR` shows them right away – no
 disk image, no re-inserting in the OSD. Whatever the MERIDIAN saves there
 is a plain file. Long names appear as 8.3 aliases (`Space Debris.mod` →
-`SPACED~1.MOD`; type `~` with AltGr + `+`). The service creates the folder
+`SPACED~1.MOD`; type `~` with Shift + `` ` `` on the US layout, AltGr + `+`
+on the German one). The service creates the folder
 when it starts.
 
 ```basic

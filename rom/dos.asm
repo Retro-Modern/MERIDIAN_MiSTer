@@ -2076,4 +2076,11 @@ P_TPTR_M   = $039D
 	.include "spritedata.asm"
 	.include "palette.asm"
 
-	.cerror * > $8000, "DOS-ROM zu gross"
+	.cerror * > $7F00, "DOS-ROM zu gross (ab $7F00 liegt die US-Tastatur)"
+
+; US-Tastaturbelegung (PFORTE $C10C Bit 2): zwei Tabellen zu 128 Byte an
+; fester Stelle, der Kern liest sie lang (US_NORMAL/US_SHIFT in kern.asm).
+; Sie liegen hier und nicht im Kern-ROM, weil dort kein Platz mehr ist.
+	* = $7F00
+	.include "tastatur_us.inc"
+	.cerror * != $8000, "US-Tastatur muss genau bis $7FFF reichen"

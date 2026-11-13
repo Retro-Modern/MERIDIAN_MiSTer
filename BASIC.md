@@ -436,7 +436,9 @@ SONG STOP
 
 −1 while the key with character `c` is held down, otherwise 0: letters as
 capital or small letter code (`KEY(65)` or `KEY(97)` for A), 13 Return,
-32 space, 28 right, 29 left, 30 up, 31 down. `KEY(0)`: any key. Unlike
+32 space, 28 right, 29 left, 30 up, 31 down. `KEY(0)`: any key. The key
+is found by the layout chosen in the OSD, so `KEY(89)` is the key labelled
+Y on a US keyboard as on a German one. Unlike
 `GET` it sees keys held together – for games.
 
 Return is still down for a moment after you type `RUN` – don't use

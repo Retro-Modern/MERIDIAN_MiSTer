@@ -18,8 +18,14 @@ set -e
 cd ${0:A:h}
 MISTER=${MISTER:-mister}
 ssh_m() { ssh -o BatchMode=yes $MISTER "$@" 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true; }
+# Anhalten: die PID-Datei allein reicht nicht - setsid gabelt manchmal (beim
+# Start aus user-startup.sh stand dort schon die falsche Nummer), und dann
+# liefen alter und neuer Dienst nebeneinander am selben Fenster. Darum
+# zusaetzlich jeden Prozess mit genau dieser Befehlszeile (nicht per ps:
+# die Befehlszeile dieser ssh-Sitzung enthaelt selbst den Namen).
+STOPP='kill $(cat /tmp/draht.pid) 2>/dev/null; for d in /proc/[0-9]*; do [ "$(tr "\0" " " 2>/dev/null < $d/cmdline)" = "python3 -u draht.py " ] && kill ${d#/proc/} && echo angehalten; done'
 case "$1" in
-	stopp) ssh_m 'kill $(cat /tmp/draht.pid) 2>/dev/null && echo angehalten' ;;
+	stopp) ssh_m "$STOPP" ;;
 	log)   ssh_m 'tail -30 /tmp/draht.log' ;;
 	hvsc)  # eine Datei: exFAT blaeht 61 000 kleine Dateien auf Gigabytes auf
 		[ -f ../sidjam/hvsc/hvsc.zip ] || (cd ../sidjam/hvsc && find C64Music -name '*.sid' | zip -q -9 hvsc.zip -@)
@@ -29,8 +35,8 @@ case "$1" in
 	*)
 		ssh_m 'mkdir -p /media/fat/linux/meridian'
 		# erst anhalten: laufende Programme (sidkern, sidton) lassen sich nicht ueberschreiben
-		ssh_m 'kill $(cat /tmp/draht.pid) 2>/dev/null; sleep 0.5'
-		scp -q draht.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py bild_dienst.py druck_dienst.py disk.py ../rom/zeichensatz.bin \
+		ssh_m "$STOPP >/dev/null; sleep 0.5"
+		scp -q draht.py leitung_dienst.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py bild_dienst.py druck_dienst.py disk.py ../rom/zeichensatz.bin \
 			../sidjam/dienst/sidjam_dienst.py ../sidjam/dienst/orgelwandler.py ../sidjam/dienst/hvsc_index.py \
 			../taktstock/netz/takjam_dienst.py \
 			$MISTER:/media/fat/linux/meridian/ 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true
@@ -45,6 +51,6 @@ case "$1" in
 		[ -f $BILDWANDLER ] && scp -q $BILDWANDLER $MISTER:/media/fat/linux/meridian/bildwandler 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true
 		# (nicht per ps suchen: die Befehlszeile dieser Sitzung enthaelt selbst
 		# den Namen des Dienstes)
-		ssh_m 'kill $(cat /tmp/draht.pid) 2>/dev/null; sleep 0.3; cd /media/fat/linux/meridian; setsid nohup python3 -u draht.py > /tmp/draht.log 2>&1 < /dev/null & echo $! > /tmp/draht.pid; sleep 1; cat /tmp/draht.log'
+		ssh_m "$STOPP >/dev/null; sleep 0.3; "'cd /media/fat/linux/meridian; setsid nohup python3 -u draht.py > /tmp/draht.log 2>&1 < /dev/null & echo $! > /tmp/draht.pid; sleep 1; cat /tmp/draht.log'
 		;;
 esac

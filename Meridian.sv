@@ -55,7 +55,10 @@ localparam CONF_STR = {
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[2],Video,NTSC 60 Hz,PAL 50 Hz;",
-	"O[3],Keyboard,German PC,German Mac;",
+	// Belegung frueher in O[3] (PC/Mac); fuer die dritte Wahl US ein neues
+	// Feld, weil O[4] schon Stereo ist und SCHUB O[8] braucht. O[3] bleibt
+	// unbenutzt.
+	"O[11:10],Keyboard,German PC,German Mac,US;",
 	"O[5:4],Stereo,Full,75 %,50 %,Mono;",
 	"-;",
 	"F1,MER,Load program;",
@@ -217,8 +220,9 @@ meridian_core core
 	.rtc(rtc),
 	.joy0(joystick_0[15:0]),
 	.joy1(joystick_1[15:0]),
-	.layout_mac(status[3]),
+	.layout_mac(status[11:10] == 2'd1),
 	.layout_m65(1'b0),
+	.layout_us(status[11:10] == 2'd2),
 
 	.ioctl_download(ioctl_download),
 	.ioctl_index(ioctl_index[7:0]),

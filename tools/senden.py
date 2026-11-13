@@ -71,6 +71,29 @@ def mer_kopf(daten, lade, start, auto):
             + struct.pack("<I", start)[:3] + b"\x00" + struct.pack("<I", len(daten)))
 
 
+# Das Postfach endet nach 1 MB: ab $3E100000 liegt das DRAHT-Fenster, in das
+# draht.py alle 50 ms Herzschlag und Ablage-Stand schreibt. Was laenger ist,
+# reichte hinein, und BOTE kopierte DRAHTs Bytes mit in den Speicher (Paket
+# fuer meridian-scummvm, 13 MB: Palette und ein Skript in $14:0000 kaputt).
+# Darum gehen grosse Dateien in Stuecken; nur das letzte startet.
+STUECK = 0xF0000
+
+
+def zerlegen(mer):
+    """MER-Datei -> Liste von MER-Dateien, die einzeln ins Postfach passen"""
+    daten = mer[16:]
+    if len(daten) <= STUECK:
+        return [mer]
+    lade = struct.unpack("<I", mer[4:8])[0] & 0xFFFFFF
+    aus = []
+    for a in range(0, len(daten), STUECK):
+        teil = daten[a:a + STUECK]
+        flags = mer[7] if a + STUECK >= len(daten) else 0
+        aus.append(b"MER\x01" + struct.pack("<I", lade + a)[:3] + bytes([flags])
+                   + mer[8:12] + struct.pack("<I", len(teil)) + teil)
+    return aus
+
+
 def adresse(text):
     wert = int(text.lstrip("$"), 16)
     if not 0 <= wert <= 0xFFFFFF:
@@ -91,6 +114,7 @@ def main():
     a = p.parse_args()
 
     pakete = []
+    namen = []
     roh = 0
     for name in a.dateien:
         daten = open(name, "rb").read()
@@ -110,7 +134,11 @@ def main():
                   + ("" if a.kein_start else f", Start ${start:06X}"))
         if (struct.unpack("<I", kopf[4:8])[0] & 0xFFFFFF) + len(kopf) - 16 > 0xFF0000:
             p.error(f"{name}: reicht in Bank $FF (ROM) - die beschreibt BOTE nicht")
-        pakete.append(struct.pack("<I", len(kopf)) + kopf)
+        kurz = name.replace(chr(92), '/').split('/')[-1]
+        stuecke = zerlegen(kopf)
+        for i, s in enumerate(stuecke):
+            pakete.append(struct.pack("<I", len(s)) + s)
+            namen.append(kurz if len(stuecke) == 1 else f"{kurz} ({i + 1}/{len(stuecke)})")
 
     ziel = a.ziel if "@" in a.ziel else f"{a.benutzer}@{a.ziel}"
     skript = base64.b64encode(AUF_DEM_MISTER.encode()).decode()
@@ -119,8 +147,8 @@ def main():
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ausgabe = r.stdout.decode(errors="replace").splitlines()
     if r.returncode == 0:
-        for name, zeile in zip(a.dateien, ausgabe):
-            print(f"{name.replace(chr(92), '/').split('/')[-1]}: {zeile}")
+        for name, zeile in zip(namen, ausgabe):
+            print(f"{name}: {zeile}")
     else:
         print("\n".join(ausgabe))
     fehler = [z for z in r.stderr.decode(errors="replace").splitlines()

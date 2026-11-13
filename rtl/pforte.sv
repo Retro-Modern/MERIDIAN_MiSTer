@@ -19,7 +19,8 @@
 //                  4 Feuer A, 5 Feuer B, ... (MiSTer-Belegung)
 //   $0A/$0B        Joystick 2
 //   $0C LAYOUT     Bit 0: Mac-Tastatur (Einstellung im MiSTer-Menue),
-//                  Bit 1: MEGA65-Tastatur (nur der MEGA65-Port setzt es)
+//                  Bit 1: MEGA65-Tastatur (nur der MEGA65-Port setzt es),
+//                  Bit 2: US-Tastatur (Einstellung im MiSTer-Menue)
 //   $10-$13 UHR    Mikrosekunden seit dem Start (32 Bit); Schreiben auf $10
 //                  friert den Stand zum Lesen ein
 //   $14/$15        Timer A: Schreiben = Startwert, Lesen = Zaehlerstand
@@ -59,6 +60,7 @@ module pforte
 	input      [15:0] joy1,
 	input             layout_mac,
 	input             layout_m65,   // MEGA65-Belegung im Kern-ROM (MiSTer: 0)
+	input             layout_us,    // US-Belegung im Kern-ROM
 
 	input      [24:0] ps2_mouse,    // [24] Wechsel, [23:16] dY, [15:8] dX, [7:0] Status
 	input       [7:0] ps2_mouse_ext, // Rad (Schritte mit Vorzeichen)
@@ -292,7 +294,7 @@ always @* begin
 		8'h09:   reg_dout = joy0[15:8];
 		8'h0A:   reg_dout = joy1[7:0];
 		8'h0B:   reg_dout = joy1[15:8];
-		8'h0C:   reg_dout = {6'd0, layout_m65, layout_mac};
+		8'h0C:   reg_dout = {5'd0, layout_us, layout_m65, layout_mac};
 		8'h10:   reg_dout = uhr_fest[7:0];
 		8'h11:   reg_dout = uhr_fest[15:8];
 		8'h12:   reg_dout = uhr_fest[23:16];

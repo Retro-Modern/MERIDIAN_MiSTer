@@ -190,7 +190,7 @@ _zeichen
 +	sta hilf
 	ldx #0
 _normal
-	lda tab_normal,x
+	jsr taste_normal            ; deutsch oder US (PFORTE $C10C Bit 2)
 	cmp hilf
 	bne +
 	lda @l TASTEN_AN,x          ; Index = Scancode

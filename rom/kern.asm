@@ -59,6 +59,8 @@ PFO_WEITER = $C102
 PFO_IRQST  = $C104
 PFO_IRQEN  = $C105
 PFO_LAYOUT = $C10C
+US_NORMAL  = $FF7F00            ; US-Tastatur im System-ROM (dos.asm, tastatur_us.inc)
+US_SHIFT   = $FF7F80
 PFO_TASTEU = $C116              ; Timer A Steuerung
 PFO_TBSTEU = $C11A
 
@@ -2444,21 +2446,41 @@ m65_normal
 	.as
 	.xl
 	jsr m65_an
-	beq _pc
+	beq taste_normal
 	ldy #m65_l_normal-m65_listen
 	bra m65_taste
-_pc
-	lda tab_normal,x
-	rts
 m65_shift
 	.as
 	.xl
 	jsr m65_an
-	beq _pc
+	beq taste_shift
 	ldy #m65_l_shift-m65_listen
 	bra m65_taste
-_pc
+
+; Zeichen der Taste X ohne / mit Umschalt: deutsch aus tab_normal/tab_shift,
+; mit US-Belegung (PFORTE $C10C Bit 2) aus dem System-ROM. Auch KEY() fragt
+; hier, damit KEY(ASC("Y")) die Taste meint, auf der Y steht.
+taste_normal
+	.as
+	.xl
+	lda PFO_LAYOUT
+	and #$04
+	bne _us
+	lda tab_normal,x
+	rts
+_us
+	lda US_NORMAL,x
+	rts
+taste_shift
+	.as
+	.xl
+	lda PFO_LAYOUT
+	and #$04
+	bne _us
 	lda tab_shift,x
+	rts
+_us
+	lda US_SHIFT,x
 	rts
 m65_taste                       ; MEGA: deren Liste, sonst Y, sonst die Tabelle
 	.as
@@ -2484,11 +2506,12 @@ _gross
 _ende
 	rts
 
-; in uebersetzen (_alt) statt "lda PFO_LAYOUT": ALT = Umlaute
+; in uebersetzen (_alt) statt "lda PFO_LAYOUT": ALT = Umlaute (MEGA65 und US)
 m65_alt
 	.as
 	.xl
-	jsr m65_an
+	lda PFO_LAYOUT
+	and #$06
 	bne _m65
 	lda PFO_LAYOUT              ; nicht MEGA65: wie bisher
 	rts
