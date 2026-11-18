@@ -30,6 +30,7 @@ KOB_KOLL   = $C404
 
 MZ_SPRITE  = $03B8              ; Sprite des Mauszeigers ($FF: aus)
 TASTEN_AN  = $033E00            ; je Taste ein Byte: 1 = gedrueckt
+LOGO_PLATZ = $02                ; F7, die Logo-Taste (Scancode $83 passt nicht in 7 Bit)
 TREFFER    = $033F00            ; 4 Byte: Beruehrungen seit der letzten Frage
 F_WERT     = $00                ; = LZ in BASIC
 PFEIL_M    = 127                ; Muster des Mauszeigers
@@ -221,7 +222,10 @@ _e0
 taste_merken
 	.as
 	lda ev_code
-	and #$7f
+	cmp #$83                    ; F7 fiele sonst mit F5 ($03) zusammen
+	bne +
+	lda #LOGO_PLATZ
++	and #$7f
 	sta hilf
 	lda ev_info
 	and #$02

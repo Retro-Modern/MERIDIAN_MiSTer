@@ -16,6 +16,7 @@
 ;    $FF:8004  Takt: aus dem Interrupt des Kerns, wenn Timer A gemeldet hat
 ;              (nur, solange SONG_AN gesetzt ist und der Standard-Haken gilt)
 ;    $FF:8008  A = n -> A: 0 Position in der Folge, 1 Zeile, 2 spielt (1/0)
+;    $FF:800C  Systemkarte der Logo-Taste F7 (der Kern ruft sie am READY)
 ;
 ;  Speicher: der Abspieler $00:B49A-$B7FF, davor eigene Werte ab $B480 (das
 ;  Ende des Bereichs fuer Maschinenprogramme); der Merker SONG_AN $00:02E0
@@ -59,6 +60,128 @@ SK_MARKE  = 63                  ; $E7 hiesse "Arbeitskopie von TAKTSTOCK"
 	jml song_befehl             ; $FF8000
 	jml song_takt               ; $FF8004
 	jml song_funktion           ; $FF8008
+	jml logo_karte              ; $FF800C
+
+;----------------------------------------------------------------------------
+; Logo-Taste F7: Systemkarte am READY. Schreibt mit dem Kern in die Textzeilen
+; und laesst den Cursor in einer leeren Zeile darunter.
+
+LK_CHROUT = $00FFC1
+LK_FARBE  = $12                 ; Hintergrund * 16 + Vordergrund
+LK_BAENKE = $20                 ; 16 Bit: Baenke zu 64 KB
+
+logo_karte
+	.as
+	.xl
+	lda LK_FARBE
+	pha
+	and #$f0
+	ora #$07                    ; gelb auf dem Hintergrund des Benutzers
+	sta LK_FARBE
+	ldx #<>lk_titel
+	jsr lk_text
+	lda 1,s
+	sta LK_FARBE
+	ldx #<>lk_cpu
+	jsr lk_text
+	#akku16
+	lda LK_BAENKE
+	cmp #16
+	bcc _kb
+	clc                         ; ab 1 MB aufgerundet wie beim Start
+	adc #15
+	lsr a
+	lsr a
+	lsr a
+	lsr a
+	jsr lk_zahl
+	ldx #<>lk_mb
+	bra _ram
+_kb
+	asl a
+	asl a
+	asl a
+	asl a
+	asl a
+	asl a
+	jsr lk_zahl
+	ldx #<>lk_kb
+_ram
+	#akku8
+	jsr lk_text
+	lda @l $00FFE2              ; Version des Systems
+	ora #'0'
+	jsl LK_CHROUT
+	lda #'.'
+	jsl LK_CHROUT
+	lda @l $00FFE3
+	ora #'0'
+	jsl LK_CHROUT
+	lda #13
+	jsl LK_CHROUT
+	#akku16
+	lda LK_BAENKE
+	cmp #$fd
+	#akku8
+	bcc _ende                   ; ohne Zusatzspeicher keine Werkstatt
+	ldx #<>lk_tasten
+	jsr lk_text
+_ende
+	pla
+	sta LK_FARBE
+	rtl
+
+lk_text                         ; X = Text in dieser Bank, mit 0 am Ende
+	.as
+	.xl
+-	lda @l $FF0000,x
+	beq +
+	phx
+	jsl LK_CHROUT
+	plx
+	inx
+	bra -
++	rts
+
+lk_zahl                         ; A (16 Bit) dezimal ausgeben
+	.al
+	.xl
+	ldy #0
+_teilen
+	ldx #0
+-	cmp #10
+	bcc +
+	sbc #10
+	inx
+	bra -
++	pha
+	iny
+	txa
+	bne _teilen
+_ziffer
+	pla
+	#akku8
+	ora #'0'
+	phy
+	jsl LK_CHROUT
+	ply
+	#akku16
+	dey
+	bne _ziffer
+	rts
+
+lk_titel
+	.text 13, "**** MERIDIAN 816 ****", 13, 0
+lk_cpu
+	.text "65C816 / 8 MHz / ", 0
+lk_kb
+	.text " KB RAM / OS ", 0
+lk_mb
+	.text " MB RAM / OS ", 0
+lk_tasten
+	.text 13, "F1 SPRITES   F2 TILES   F3 MAP", 13
+	.text "F4 SOUNDS    F5 LOOK    F6 FONT", 13
+	.text "F10 BACK     ESC STOP", 13, 0
 
 ;----------------------------------------------------------------------------
 ; Befehl: A = 0 laden und spielen, 1 anhalten

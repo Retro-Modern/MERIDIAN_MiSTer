@@ -1743,7 +1743,18 @@ _nein
 ; der Tastentabelle - GETIN liefert keine F-Tasten, Programme sehen nichts.
 werkstatt_pruefen
 	.as
-	jsr zusatz_da               ; ihre Daten liegen im Zusatzspeicher
+	lda @l TASTEN_AN+LOGO_PLATZ ; F7, die Logo-Taste: Systemkarte
+	beq +
+	jsr cursor_aus
+	jsl $FF800C
+-	wai                         ; erst nach dem Loslassen weiter
+	lda @l TASTEN_AN+LOGO_PLATZ
+	bne -
+	lda cur_x                   ; die Eingabe beginnt unter der Karte
+	sta ein_x
+	lda cur_y
+	sta ein_y
++	jsr zusatz_da               ; ihre Daten liegen im Zusatzspeicher
 	bcc _nein
 	ldy #0
 -	#akku16

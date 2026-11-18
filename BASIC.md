@@ -35,6 +35,8 @@ on. Numbers have 9 digits, 47 102 bytes are free for programs.
 - `Esc` stops a running program, `Shift+Home` clears the screen.
 - `F1`–`F6` open the workshop while BASIC waits for a command (see the
   README).
+- `F7`, the logo key, prints a system card while BASIC waits for a command:
+  memory, OS version and the workshop keys.
 - `GET` does not wait: it returns `""` when no key is waiting.
 - `PEEK`, `POKE` and `WAIT` take 24-bit addresses (0–16 777 215), see
   [Memory](#memory-and-machine-code). `FRE(0)` never goes negative.

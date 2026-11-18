@@ -1236,6 +1236,10 @@ Kacheln und Karten liegen in einer Datei. Die Werkzeuge stecken im ROM ab
 - Während BASIC auf einen Befehl wartet, öffnen F1–F6 die Werkstatt mit
   dem Reiter SPRITES, TILES, MAP, SOUNDS, LOOK oder FONT. Darin wechseln
   F1–F6 den Reiter, F10 oder Esc führen zurück.
+- F7 ist die Logo-Taste: Während BASIC auf einen Befehl wartet, schreibt sie die
+  Systemkarte (Speicher, OS-Version, Werkstatt-Tasten; `$FF:800C` im SONG-ROM).
+  Ihr Scancode `$83` hat in `TASTEN_AN` den eigenen Platz `$02`, Programme
+  fragen sie dort ab.
 - Der Kern fragt die F-Tasten roh aus der Tastentabelle ab
   (`werkstatt_pruefen` in `zeile_lesen`). GETIN und laufende Programme sehen
   davon nichts.

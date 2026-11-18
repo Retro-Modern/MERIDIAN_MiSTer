@@ -67,6 +67,10 @@ u, s types ä, ö, ü, ß. `Esc` stops a program, `Shift+Home` clears the screen
 The US layout is new in core 20261113; set it once after updating – the
 keyboard setting moved to a new place in the OSD and starts as *German PC*.
 
+**Logo key:** at the `READY.` prompt, `F7` prints a system card with the memory
+size, the OS version and the workshop keys. Programs can read the key at
+`$03:3E02`. New in core 20261118; before that, F7 acted like F5.
+
 ## BASIC
 
 The BASIC is Microsoft BASIC M6502 1.1 from 1978, which Microsoft published
