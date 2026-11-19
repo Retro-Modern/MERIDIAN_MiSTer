@@ -161,7 +161,7 @@ if there is one – also when plugged in later – otherwise on the SD card. To 
 
 1. Copy `tools/draht.py` and `tools/disk.py` to `/media/fat/linux/meridian/`.
    For the network parts of the [HORIZONT desktop](#the-horizont-desktop)
-   (RADIO, SID JAM, WEATHER, NEWS, ATLAS's browser page, TAKTSTOCK's net jam) take the full
+   (RADIO, SID JAM, WEATHER, NEWS, KATALOG, ATLAS's browser page, TAKTSTOCK's net jam) take the full
    network service package from
    [retro-modern.net/en/downloads.html](https://retro-modern.net/en/downloads.html)
    instead – unzip it into the root of the SD card.
@@ -469,6 +469,7 @@ playing in the background.
 | SID JAM | a SID jukebox – alone, or together with everyone listening |
 | WEATHER | the weather now and for five days, with a place search; the temperature also shows in the menu bar |
 | NEWS | news from tagesschau.de, heise online and the Retro-Modern forum, with the full article |
+| KATALOG | software from the [KATALOG](https://retro-modern.net/en/katalog.html) on retro-modern.net – games, programs, cartridges, music and tools; LOAD puts an entry on drive 3 (since 2.5) |
 | SETTINGS | background (sunset, starry night, a colour or your own BMP), pointer speed and left-handed buttons, screen saver (star flight or test card), 12 or 24 hour clock |
 | MINES | Minesweeper in three sizes up to 30 × 16 fields |
 | SOLITAIRE | Klondike solitaire with drag and drop |
