@@ -52,17 +52,30 @@ assert len(d) <= 16384, "DOS-ROM zu gross"
 open("rom/dos.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
 print(f"rom/dos.hex: DOS {len(d)} Bytes, frei {16384 - len(d)}")
 PY
+( cd rom && 64tass --long-branch -b -q -o werkstatt.bin -L werkstatt.lst -l werkstatt.lbl werkstatt.asm )
+python3 - <<'PY'
+d = open("rom/werkstatt.bin", "rb").read()
+assert len(d) <= 16384, "Werkstatt-ROM zu gross"
+open("rom/werkstatt.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
+print(f"rom/werkstatt.hex: WERKSTATT {len(d)} Bytes, frei {16384 - len(d)}")
+PY
+# Adressen der Werkstatt fuer EDIT (rom/edit.asm im SONG-ROM, darum danach)
+python3 - <<'PY'
+import re
+lbl = {}
+for z in open("rom/werkstatt.lbl"):
+    m = re.match(r"^(\S+)\s*=\s*\$?([0-9a-fA-F]+)", z)
+    if m:
+        lbl[m.group(1)] = int(m.group(2), 16)
+with open("rom/ws_sym.inc", "w") as f:
+    f.write("; Automatisch erzeugt von rom/bauen.sh: Adressen der Werkstatt fuer EDIT\n")
+    for n in ("w_mx", "w_my", "w_mt", "w_mtalt", "sd_fehlertexte"):
+        f.write(f"W_{n.upper()} = ${lbl[n]:06x}\n")
+PY
 ( cd rom && 64tass --long-branch -b -q -o song.bin -L song.lst song.asm )
 python3 - <<'PY'
 d = open("rom/song.bin", "rb").read()
 assert len(d) <= 16384, "SONG-ROM zu gross"
 open("rom/song.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
 print(f"rom/song.hex: SONG {len(d)} Bytes, frei {16384 - len(d)}")
-PY
-( cd rom && 64tass --long-branch -b -q -o werkstatt.bin -L werkstatt.lst werkstatt.asm )
-python3 - <<'PY'
-d = open("rom/werkstatt.bin", "rb").read()
-assert len(d) <= 16384, "Werkstatt-ROM zu gross"
-open("rom/werkstatt.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
-print(f"rom/werkstatt.hex: WERKSTATT {len(d)} Bytes, frei {16384 - len(d)}")
 PY

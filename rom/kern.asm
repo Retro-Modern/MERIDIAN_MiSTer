@@ -1738,7 +1738,7 @@ _nein
 	lda #0
 	rts
 
-; F1-F6 gedrueckt? Dann die Werkstatt mit diesem Reiter (sie stellt beim
+; F1-F6 oder F8 (EDIT) gedrueckt? Dann die Werkstatt mit diesem Reiter (sie stellt beim
 ; Verlassen Schirm, Chips und Speicher wieder her). Die Tasten kommen roh aus
 ; der Tastentabelle - GETIN liefert keine F-Tasten, Programme sehen nichts.
 werkstatt_pruefen
@@ -1765,11 +1765,11 @@ werkstatt_pruefen
 	lda @l TASTEN_AN,x
 	bne +
 	iny
-	cpy #6
+	cpy #7
 	bne -
 	rts
 +	jsr cursor_aus
-	tya                         ; Reiter 0-5
+	tya                         ; Reiter 0-6
 	jsl WERKSTATT
 _nein
 	rts
@@ -1782,7 +1782,7 @@ zusatz_da                       ; C = 1: Zusatzspeicher bis Bank $FC (SDRAM-Modu
 	#akku8
 	rts
 ws_tasten
-	.byte $05, $06, $04, $0c, $03, $0b      ; F1-F6 (Scancodes)
+	.byte $05, $06, $04, $0c, $03, $0b, $0a ; F1-F6, F8 (Scancodes)
 
 ; Eine Zeile mit dem Bildschirmeditor holen und nach BASICs Eingabepuffer
 ; legen (mit 0 abgeschlossen). Wie beim C64: In der Zeile, in der die

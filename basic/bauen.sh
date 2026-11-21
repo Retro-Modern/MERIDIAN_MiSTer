@@ -13,9 +13,9 @@ python3 - <<'PY'
 import re
 lbl = {}
 for z in open("basic.lbl"):
-    m = re.match(r"^(\S+)\s*=\s*\$?([0-9a-fA-F]+)", z)
-    if m:
-        lbl[m.group(1).upper()] = int(m.group(2), 16)
+    m = re.match(r"^(\S+)\s*=\s*(\$?)([0-9a-fA-F]+)", z)
+    if m:                       # $ = hex, sonst dezimal (Tokens wie ENDTK)
+        lbl[m.group(1).upper()] = int(m.group(3), 16 if m.group(2) else 10)
 voll = open("basic_voll.bin", "rb").read()
 anfang = min(v for v in lbl.values() if v >= 0x55) if False else 0x55
 # 64tass schreibt ab der niedrigsten Adresse: der Zeropage ($55)
@@ -34,7 +34,8 @@ with open("../rom/basic.hex", "w") as f:
 with open("../rom/basic_sym.inc", "w") as f:
     f.write("; Automatisch erzeugt von basic/bauen.sh\n")
     for n in ("ROMLOC", "RAMLOC", "INIT", "START", "READY", "BUF", "BASIC_ENDE", "DATENBANK", "TXTTAB", "VARTAB",
-              "ARYTAB", "STREND", "FRETOP", "MEMSIZ", "DATPTR", "OLDTXT"):
+              "ARYTAB", "STREND", "FRETOP", "MEMSIZ", "DATPTR", "OLDTXT",
+              "RESLST", "M_RESLST", "ENDTK", "REMTK", "DATATK", "PRINTK", "ELSETK"):
         f.write(f"B_{n} = ${lbl[n]:04x}\n")
     f.write(f"B_LAENGE = ${bis - von:04x}\n")
     f.write(f"B_ERW = ${evon:04x}\nB_ERW_ROM = ${ERW_ROM:04x}\nB_ERW_LAENGE = ${ebis - evon:04x}\n")

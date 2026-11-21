@@ -300,7 +300,8 @@ RAM from `$80:0000`; `KONZEPT.md` has the details.
 ## The workshop
 
 Like on the Pico-8, a whole game can be made on the machine itself. While
-BASIC waits for a command, **F1–F6** open the workshop – F10 or Esc go back,
+BASIC waits for a command, **F1–F6** open the workshop and **F8** its text
+editor – F10 or Esc go back,
 and your program and screen are exactly as you left them. Everything is
 driven with the mouse and a few keys; the help lines on each tab list them.
 
@@ -312,6 +313,7 @@ driven with the mouse and a few keys; the help lines on each tab list them.
 | F4 | SOUNDS | 64 short sounds: paint pitch and volume over 32 steps, eight waveforms, eight effects (slide, vibrato, drop, fades, arpeggios), speed and loop |
 | F5 | LOOK | your game's look: all 256 colours, which colours glow and how strongly, the ink colour and offset |
 | F6 | FONT | your own character set, in the sprite painter |
+| F8 | EDIT | a full-screen text editor for the BASIC program in memory and for text files – see [below](#edit-the-text-editor) |
 
 `SAVE "GAME"` stores the program together with everything in the workshop
 that is not empty, `LOAD "GAME"` brings it all back – one file per game.
@@ -343,6 +345,37 @@ Maps are only shown while a program runs; back at the prompt you see your
 text again. The workshop ROM lives at `$FF:C000`, its data in expansion RAM
 banks `$F8–$FC`; `KONZEPT.md` (section *Werkstatt*) has the memory map, the
 file format and the details.
+
+### EDIT, the text editor
+
+**F8** opens the BASIC program in memory as plain text: scroll through it,
+change any line, insert and delete lines anywhere. When you leave the
+workshop (F10 or Esc), the changed text replaces the program, as if every
+line had been typed in, followed by `CLR`. Lines need their numbers, and
+the numbers must go up; if a line is wrong, the editor stays open, puts the
+cursor on it and says why. Keywords may be typed in small letters.
+
+It also edits text files on drives 1–3 (drive 3 is the folder
+`games/MERIDIAN/files`, so a file saved there can be opened on a PC as
+well). Lines end with LF; CR LF and CR are read too. A BASIC program file
+opened this way (e.g. `GLOWMINE.BAS`) is shown as text and saved as a
+program again. A program file that also holds workshop data can be viewed;
+to change it, `LOAD` it in BASIC and press F8.
+
+| Key | |
+|---|---|
+| cursor keys, Home, End, PgUp, PgDn | move; Shift+Home goes to the top, Ctrl+End to the bottom; a mouse click places the cursor |
+| Return, Backspace, Del, Tab | split, join and delete; Tab inserts spaces |
+| Ctrl+X, Ctrl+C, Ctrl+V | cut the line (cuts in a row collect), copy it, paste in front of the cursor's line |
+| Ctrl+F, Ctrl+G, Ctrl+L | find (case does not matter), find again, go to a line (in BASIC its line number) |
+| Ctrl+O, Ctrl+S, Ctrl+N | open, save (Tab picks the drive), new empty text |
+| Ctrl+B, Ctrl+P | show the BASIC program in memory; use this text as the program |
+
+The text can be up to 65,279 bytes long. The editor sits in the free part
+of the SONG ROM (`rom/edit.asm`, jump table at `$FF:BFF0`); its text and
+state live in expansion RAM banks `$E4–$E6` and stay there between visits.
+
+EDIT was contributed by James Gill ([jnngill](https://github.com/jnngill)).
 
 ![The workshop: MAP](Screens/Workshop_MAP.png)
 
