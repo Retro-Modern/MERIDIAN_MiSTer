@@ -16,6 +16,10 @@ Befehle hier lesen sie genauso.
                                 die belegten Spritemuster als BASIC-Unterprogramm
                                 mit DATA-Zeilen: GOSUB 9000 legt sie mit PATTERN
                                 an, PB(m) haelt die Palettenbank fuer SPRITE
+    cartridge.py logic REGELN.json [--in spiel.bas] [--aus neu.bas] [--mer R.MER]
+                                LOGIC: aus Spielregeln den BASIC-Block ab Zeile
+                                60000 schreiben (Format in tools/logic.py);
+                                --mer: der Regelblock fuer BLOAD
 
 Als Modul: Cartridge() sammelt, was die Werkstatt haelt - 128 Spritemuster,
 256 Kacheln, zwei Karten, 64 Klaenge, den Look und den Zeichensatz -, datei()
@@ -379,7 +383,30 @@ def main():
     b = u.add_parser("bilder"); b.add_argument("datei"); b.add_argument("ziel"); b.add_argument("--disk")
     b = u.add_parser("data"); b.add_argument("datei"); b.add_argument("--disk")
     b.add_argument("--zeile", type=int, default=9000); b.add_argument("--aus")
+    b = u.add_parser("logic"); b.add_argument("regeln")
+    b.add_argument("--in", dest="programm"); b.add_argument("--aus"); b.add_argument("--mer")
     o = a.parse_args()
+    if o.befehl == "logic":
+        try:
+            import logic
+        except ImportError:             # im oeffentlichen Repo liegt tools/logic.py nicht
+            sys.exit("cartridge.py logic: tools/logic.py is not part of this package")
+        try:
+            regeln = logic.aus_datei(o.regeln)
+            block = logic.text(regeln)
+            if o.programm:
+                block = logic.anhaengen(open(o.programm, encoding="utf-8").read(), block)
+        except logic.Fehler as f:
+            sys.exit(f"{o.regeln}: {f}")
+        if o.mer:
+            open(o.mer, "wb").write(logic.mer(regeln))
+            print(f"{o.mer}: Regelblock {len(regeln)} Byte fuer BLOAD (nach $F8:7000)")
+        if o.aus:
+            open(o.aus, "w", encoding="utf-8").write(block)
+            print(f"{o.aus}: {block.count(chr(10))} Zeilen")
+        else:
+            sys.stdout.write(block)
+        return
     daten = datei_holen(o.datei, o.disk)
     prog, c, liste = lesen(daten)
     if o.befehl == "liste":

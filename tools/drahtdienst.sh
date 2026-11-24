@@ -36,7 +36,7 @@ case "$1" in
 		ssh_m 'mkdir -p /media/fat/linux/meridian'
 		# erst anhalten: laufende Programme (sidkern, sidton) lassen sich nicht ueberschreiben
 		ssh_m "$STOPP >/dev/null; sleep 0.5"
-		scp -q draht.py leitung_dienst.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py bild_dienst.py druck_dienst.py disk.py ../rom/zeichensatz.bin \
+		scp -q draht.py leitung_dienst.py ablage_seite.py radio_dienst.py radio_bild.py wetter_dienst.py nachrichten_dienst.py bild_dienst.py druck_dienst.py katalog_dienst.py disk.py ../rom/zeichensatz.bin \
 			../sidjam/dienst/sidjam_dienst.py ../sidjam/dienst/orgelwandler.py ../sidjam/dienst/hvsc_index.py \
 			../taktstock/netz/takjam_dienst.py \
 			$MISTER:/media/fat/linux/meridian/ 2>&1 | grep -v 'post-quantum\|store now\|openssh.com/pq' || true

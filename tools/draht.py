@@ -7,6 +7,8 @@ MERIDIAN in sein DDR3-Fenster (Bank $FD, physisch $3E100000) schreibt.
     python3 draht.py                      auf dem MiSTer (/dev/mem); arbeitet nur,
                                           solange der MERIDIAN-Core laeuft
     python3 draht.py --datei FENSTER      gegen die Simulation (MERIDIAN_DRAHT)
+    python3 draht.py --fern ADRESSE          fuer den MERIDIAN auf dem Elite II (draht_fern.py,
+                                          ueber dessen DRAHT-Bruecke auf TCP 8160; Ordner ~/MERIDIAN)
 
 Befehle aus BASIC: NET "befehl"[,kanal]
     CONNECT host[:port]   TCP-Verbindung auf Kanal 1-4 (Port ohne Angabe: 23)
@@ -27,6 +29,13 @@ Laufwerk 3 (Etappe 14): der Ordner games/MERIDIAN/files als Laufwerk des
 DOS. Anfragen 4-8 (Eintrag, Lesen, Schreiben, Entfernen, Frei), die Daten
 stueckweise im Fenster ab $1000. Lange Dateinamen bekommen ein 8.3-Kuerzel
 (SPACED~1.MOD); Antwort-Status = Fehlernummer des DOS.
+Art 18 (seit Netzdienst 2.5) ist Art 4 mit Endung: Index (2) und Endung
+(3, z. B. "TAK"; kuerzere mit Leerzeichen oder 0 aufgefuellt, drei davon:
+Dateien ohne Endung) - geliefert wird der naechste Eintrag ab dem Index mit
+dieser Endung, in derselben Form wie bei Art 4. Der SPIELMACHER sucht so
+seine Songs; ueber das Fenster des Elite II schafft er nur wenige
+Anfragen je Sekunde, und Laufwerk 3 kann Tausende Dateien haben. Ein Dienst
+ohne Art 18 antwortet "BAD REQUEST" (-6), dann fragt er wie bisher.
 Fuer ATLAS (HORIZONT): Art 5 mit Byte 17 = 1 liefert eine MER-Datei roh,
 mit Kopf; Art 9 benennt um (alter Name 8.3 in Byte 0-10, neuer in 18-28);
 Art 10 meldet eine Datei (8.3 in Byte 0-10) der Browser-Seite (SEND), Art 11
@@ -43,6 +52,9 @@ ab $2000, Auftraege fuer die ORGEL im Ring ab $4000, Samples wie beim Radio
 (Tabelle: sidjam/SCHNITTSTELLEN.md).
 Nachrichten (App NEWS, nachrichten_dienst.py): Art 15 mit einem Befehl als
 Text (Tagesschau, heise online, Retro-Modern-Forum).
+KATALOG (App KATALOG, katalog_dienst.py): Art 17 mit einem Befehl als Text -
+die Software aus dem KATALOG auf retro-modern.net, LADE legt sie auf
+Laufwerk 3 (ZIP-Pakete ausgepackt).
 Wetter (App WEATHER, wetter_dienst.py): Art 14 mit einem Befehl als Text;
 die Kurzform fuer die Menueleiste von HORIZONT schreibt der Dienst ab $22.
 Bilder (Apps PICTURES und PAINT, bild_dienst.py): Art 22 mit einem Befehl als
@@ -102,6 +114,10 @@ try:
 except ImportError:
     nachrichten_dienst = None
 try:
+    import katalog_dienst               # KATALOG (App KATALOG)
+except ImportError:
+    katalog_dienst = None
+try:
     import wetter_dienst                # Wetter (App WEATHER, Menueleiste)
 except ImportError:
     wetter_dienst = None
@@ -113,6 +129,9 @@ try:
     import druck_dienst                 # Drucken fuer NOTES und PAINT
 except ImportError:
     druck_dienst = None
+# im Baum liegt der Dienst unter sidjam/dienst/ (am MiSTer neben draht.py) -
+# ohne diesen Pfad hatte die Bruecke auf dem Mac kein SID JAM ("NO SID JAM")
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "sidjam", "dienst"))
 try:
     import sidjam_dienst                # SID JAM (sidjam/dienst/)
 except ImportError:
@@ -288,6 +307,8 @@ class Dienst:
         self.druck = None               # Drucken (druck_dienst), beim ersten Befehl
         self.wetter = wetter_dienst.Wetter(fenster, zu_meridian, ordner) if wetter_dienst else None
         self.nachrichten = nachrichten_dienst.Nachrichten(zu_meridian) if nachrichten_dienst else None
+        self.katalog = katalog_dienst.Katalog(zu_meridian, lambda: self.dateien,
+                                              lambda: self.ordner) if katalog_dienst else None
         self.tor_radio = Tor(fenster)
         self.tor_jam = Tor(fenster)
         self.leben = {}                 # Adresse -> (Wert, seit wann, schon gezaehlt)
@@ -325,6 +346,13 @@ class Dienst:
             self.ordner_setzen(neu)
 
     # -------------------------------------------------- Welcher Core?
+    def kern_name(self):
+        """Am MiSTer der geladene Core; mit --fern (Elite II) "MERIDIAN", solange die Bruecke verbunden ist."""
+        try:
+            return open("/tmp/CORENAME").read().strip().upper()
+        except OSError:
+            return ""
+
     def kern_pruefen(self):
         """Auf dem MiSTer nur arbeiten, solange der MERIDIAN-Core laeuft:
         andere Cores benutzen dasselbe DDR3 und duerfen nichts abbekommen."""
@@ -334,10 +362,7 @@ class Dienst:
         if jetzt - self.pruef_zeit < 0.5:
             return self.aktiv
         self.pruef_zeit = jetzt
-        try:
-            name = open("/tmp/CORENAME").read().strip().upper()
-        except OSError:
-            name = ""
+        name = self.kern_name()
         aktiv = name == "MERIDIAN"
         if aktiv and not self.aktiv:                # MERIDIAN geladen: alte Reste
             self.m[ANTW] = self.m[ANR]              # im Fenster gelten als erledigt
@@ -430,6 +455,14 @@ class Dienst:
             except Exception as e:
                 status, antwort = 2, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
+        elif art == 17:                             # KATALOG (App KATALOG)
+            if not self.katalog:
+                return self.antworten(nr, -6, b"NO KATALOG")
+            try:
+                status, antwort = self.katalog.anfrage(text)
+            except Exception as e:
+                status, antwort = 2, zu_meridian("ERROR: " + str(e))
+            self.antworten(nr, status, antwort)
         elif art == 22:                             # Bilder (Apps PICTURES und PAINT)
             if not bild_dienst:
                 return self.antworten(nr, -6, b"NO PICTURE SERVICE")
@@ -504,7 +537,7 @@ class Dienst:
             except Exception as e:
                 status, antwort = -1, zu_meridian("ERROR: " + str(e))
             self.antworten(nr, status, antwort)
-        elif 4 <= art <= 11:
+        elif 4 <= art <= 11 or art == 18:
             if art in (5, 6):                       # Lesen und Schreiben brauchen $1000-$FFFF:
                 self.radio_halten()                 # Radio und SID JAM schrieben sonst in die
                 self.jam_halten()                   # Dateidaten (Verzeichnis, Umbenennen usw. nicht)
@@ -675,9 +708,13 @@ class Dienst:
         return None, name, end
 
     def laufwerk(self, art, text):
-        if art == 4:                                    # Eintrag Nummer i
+        if art in (4, 18):                              # Eintrag Nummer i (18: ab i mit Endung)
             i = struct.unpack("<H", text[:2])[0]
             liste = self.verzeichnis()
+            if art == 18:
+                end = text[2:5].decode("latin-1").upper().strip(" \0")
+                while i < len(liste) and liste[i][1] != end:
+                    i += 1
             if i >= len(liste):
                 return D_FEHLT, b""
             kurz, e, n = liste[i]
@@ -907,9 +944,18 @@ def main():
     a.add_argument("--datei", help="Fenster aus einer Datei (Simulation)")
     a.add_argument("--ordner", help="Ordner fuer DISK und FILES (Vorgabe: games/MERIDIAN wie beim MiSTer, USB-Laufwerk vor SD-Karte, auch spaeter eingesteckt)")
     a.add_argument("--port", type=int, default=816, help="Browser-Ablage (0: aus)")
+    a.add_argument("--fern", metavar="HOST", help="MERIDIAN auf dem Elite II: Fenster und Postfach ueber die DRAHT-Bruecke (TCP 8160)")
+    a.add_argument("--passwort", default=os.environ.get("E2_PASSWORT", ""), help="Netzwerk-Passwort der Ultimate (mit --fern)")
     o = a.parse_args()
     postfach = None
-    if o.datei:
+    spiegel = None
+    if o.fern:
+        import draht_fern
+        spiegel = draht_fern.Spiegel(o.fern, passwort=o.passwort, melden=lambda t: print(t, flush=True))
+        fenster, postfach = spiegel.fenster, spiegel.postfach
+        if not o.ordner:
+            o.ordner = os.path.expanduser("~/MERIDIAN")     # games/MERIDIAN gibt es hier nicht
+    elif o.datei:
         fd = os.open(o.datei, os.O_RDWR | os.O_CREAT)
         os.ftruncate(fd, 65536)
         fenster = mmap.mmap(fd, 65536)
@@ -919,7 +965,9 @@ def main():
         postfach = mmap.mmap(fd, 1024 * 1024, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=POSTFACH)
     ordner = o.ordner or spiele_ordner()
     os.makedirs(ordner, exist_ok=True)
-    d = Dienst(fenster, postfach, ordner, nur_meridian=not o.datei, ordner_auto=not o.ordner)
+    d = Dienst(fenster, postfach, ordner, nur_meridian=not o.datei, ordner_auto=not o.ordner and not o.fern)
+    if spiegel:
+        d.kern_name = lambda: "MERIDIAN" if spiegel.kern_da() else ""
     if sidjam_dienst:
         sidjam_dienst.MERIDIAN = ordner
     print("Laufwerk 3:", d.dateien, flush=True)
@@ -932,7 +980,8 @@ def main():
         except OSError as e:
             d.ablage = None
             print("Browser-Ablage nicht moeglich:", e, flush=True)
-    print("DRAHT bereit", "(Datei " + o.datei + ")" if o.datei else "(DDR3 $3E100000)", flush=True)
+    print("DRAHT bereit", "(Datei " + o.datei + ")" if o.datei else "(Elite II " + o.fern + ", TCP 8160)" if o.fern
+          else "(DDR3 $3E100000)", flush=True)
     while True:
         if not d.kern_pruefen():
             time.sleep(0.5)

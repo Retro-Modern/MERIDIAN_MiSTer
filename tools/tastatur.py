@@ -17,7 +17,7 @@ auf festen Scancodes (meridian_m65/CORE/rtl/m65_tasten.sv). Die Listen hier
 sagen nur, wo die MEGA65-Tasten etwas anderes zeigen als das deutsche Layout:
 Zeichen wie auf den Tasten und in matrix_to_ascii.vhdl des MEGA65-Kerns
 (Umschalt+3 = #, +7 = ', +0 = {, +: = [ ...; MEGA-Taste fuer | { } ~ Rueckstrich `),
-ALT fuer die Umlaute. Je Liste Paare (Scancode, Zeichen), Ende mit 0;
+ALT fuer die Umlaute (am U64 ohne ALT: die MEGA-/C=-Taste, kern.asm). Je Liste Paare (Scancode, Zeichen), Ende mit 0;
 Zeichen 0 = die Taste zeigt nichts.
 """
 import os

@@ -5039,7 +5039,7 @@ FNWAIT:
 	ldx #0
 	jsr CHRGOT
 	beq ZSTORD
-	jsr COMBYT	;GET MASK2.
+	jsr M_COMBYT	;MERIDIAN: LZ bleibt
 STORDO:
 	stx EORMSK
 	ldy #0

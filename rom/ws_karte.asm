@@ -11,8 +11,18 @@
 ;  wieder auf Text und Bitmap. Unten die Kacheln zur Auswahl wie bei TILES.
 ;
 ;  Maus: links setzen, rechts Kachel aufnehmen; Klick in der Auswahl waehlt.
-;  Tasten: 1/2 Karte, Pfeile rollen, H/V spiegeln, ,/. Kachel, X leeren,
-;  U zurueck.
+;  Tasten: 1/2 Karte, Pfeile rollen (auch der Zeiger am Rand der Ansicht,
+;  rom/ws_rollen.asm), H/V spiegeln, ,/. Kachel, Entf oder
+;  Rueckschritt das Feld unter der Maus leeren, X Karte leeren, U zurueck
+;  (nur auf der Karte, die zuletzt geaendert wurde: ein Stand fuer beide).
+;
+;  Gemalt wird immer nur auf der gewaehlten Karte, zu sehen sind beide. Darum
+;  steht die Karte farbig ueber der Auswahl (ka_kopf), und geleert (Entf,
+;  oder links mit der leeren Kachel 0) wird nur die vorderste Kachel eines
+;  Feldes: liegt sie auf der anderen Karte, bleibt alles stehen und ein
+;  Hinweis nennt die Karte (ka_fremd). Sonst risse, wer auf Karte 1 eine Wand
+;  von Karte 2 treffen will, Loecher in den Hintergrund darunter - und saehe
+;  sie unter der Wand nicht einmal.
 ;============================================================================
 
 KARTE1    = $036000             ; Karte 1 (Ebene A), 4 KB
@@ -25,6 +35,7 @@ KA_ALT    = KART+$4320          ; BASIC MAP: Register davor (wie PINSEL $00-$32)
 PIN_B_MUS = $C025
 PIN_B_SX  = $C030
 PIN_B_SY  = $C032
+ROLL_RUF  = $FF402A             ; System-ROM (rom/ws_rollen.asm): rollen mit Pfeiltaste A und Mausrand
 
 	.virtual W_RAM+$a0          ; Variablen von MAP (bleiben bis zum naechsten Besuch)
 ka_ebene  .byte ?               ; 0 Karte 1, 1 Karte 2
@@ -34,6 +45,11 @@ ka_flip   .byte ?               ; Bit 0 X, Bit 1 Y
 ka_cx     .byte ?               ; Kachel unter der Maus (Schirm), $ff = keine
 ka_cy     .byte ?
 ka_z      .long ?               ; Zeiger auf den Eintrag
+ka_hinweis .byte ?              ; Hinweis auf die andere Karte: KA_HINWEIS_AN, 0 = keiner
+ka_undo_karte .byte ?           ; der Stand in KA_UNDO gehoert zu Karte 1/2, 0 = keiner da
+ka_strich .byte ?               ; seit dem Klick ist schon gemerkt (0 = noch nicht)
+ka_rand   .byte ?               ; Bilder, die der Zeiger schon am Rand steht (rom/ws_rollen.asm)
+ka_bild   .byte ?               ;   und der Bildzaehler beim letzten Zaehlen
 	.endv
 
 KS_KARTE = 5
@@ -45,6 +61,13 @@ KS_X = 50
 KS_Y = 56
 KA_SPALTEN = 40
 KA_ZEILEN  = 18
+KK_SPALTE = 22                  ; Zeile 19: die gewaehlte Karte (der Anfang der
+KK_BREITE = 16                  ; Statuszeile, farbig), daneben der Hinweis
+KH_SPALTE = 40
+F_KARTE2  = $30                 ; schwarz auf tuerkis (Karte 1: F_AKTIV, gelb)
+F_HINWEIS = $21                 ; weiss auf rot
+F_UNSICHTBAR = $66              ; blau auf blau
+KA_HINWEIS_AN = F_HINWEIS ^ F_UNSICHTBAR    ; (ka_kopf macht daraus die Farbe)
 
 setze	.macro reg, wert        ; LOTSE: Register = Wert
 	.byte $02, <(\reg), >(\reg), \wert
@@ -55,6 +78,7 @@ setze	.macro reg, wert        ; LOTSE: Register = Wert
 
 ka_zeichnen
 	.as
+	stz ka_hinweis              ; (bliebe sonst bis zum naechsten Besuch)
 	jsr ki_wahl
 	jsr sp_laden                ; Bank der Kachel
 	#text 19, 1, F_TITEL, t_ki_bogen
@@ -67,7 +91,7 @@ ka_neu                          ; nach der Wahl einer Kachel
 	jmp ka_status
 
 t_ka_hilfe1 .null "Mouse: left place, right pick tile.  1/2 map  Arrows scroll  H/V flip  ,. tile"
-t_ka_hilfe2 .null "X clear map  U undo.  BASIC: MAP 1,x,y shows map 1 behind, MAP 2 in front"
+t_ka_hilfe2 .null "Del erase  X clear map  U undo.  BASIC: MAP n,x,y shows map n"
 
 ; LOTSE: Karten in den Zeilen 8-151
 ka_lotse
@@ -123,27 +147,27 @@ ka_liste
 	.byte 0, 0, 0, 0            ; ENDE
 ka_liste_ende
 
-; Rollen: Spalte ka_sx, Zeile ka_sy in Schirmzeile 8 (beide Ebenen)
-ka_rollen
+; Rollen: Spalte ka_sx, Zeile ka_sy in Schirmzeile 8 (beide Ebenen). Das
+; macht seit 24.11.2026 das System-ROM (rom/ws_rollen.asm): es setzt die
+; Rollregister und rollt vorher mit einer Pfeiltaste in A und wenn der
+; Mauszeiger am Rand der Ansicht steht. Hier war dafuer kein Platz mehr.
+ka_rollen                       ; Reiter oeffnen: nur die Register, das Rollen am Rand ruht
 	.as
-	#akku16
-	lda ka_sx
-	and #$00ff
-	asl a
-	asl a
-	asl a
-	sta PIN_A_SX
-	sta PIN_B_SX
-	#akku8
-	lda ka_sy
-	asl a
-	asl a
-	asl a
-	sec
-	sbc #8                      ; Schirmzeile 8 zeigt Zeile ka_sy
-	sta PIN_A_SY
-	sta PIN_B_SY
+	lda #$ff                    ; (WR_OEFFNEN)
+ka_rollen_taste                 ; A = Taste dieses Bildes (bleibt)
+	pha
+	lda @l ROLL_RUF             ; steht dort der Sprung? In einem System-ROM vor
+	cmp #$4c                    ; dem 24.11.2026 beginnt an der Stelle dos_befehl
+	bne +                       ; (phd): der Aufruf wuerde je Bild das DOS laden lassen
+	pla
+	jsl ROLL_RUF
 	rts
++	pla
+	rts
+	.cerror w_mx != W_RAM+$0a || w_my != W_RAM+$0c || w_mt != W_RAM+$0e, "ws_rollen.asm kennt w_mx, w_my, w_mt an $A00A, $A00C, $A00E"
+	.cerror ka_sx != W_RAM+$a1 || ka_sy != W_RAM+$a2, "ws_rollen.asm kennt ka_sx, ka_sy an $A0A1, $A0A2"
+	.cerror ka_rand != W_RAM+$ac || ka_bild != W_RAM+$ad, "ws_rollen.asm kennt ka_rand, ka_bild an $A0AC, $A0AD"
+	.cerror KA_SPALTEN != 40 || KA_ZEILEN != 18, "ws_rollen.asm rechnet mit 40 x 18 Kacheln (WR_SPALTEN, WR_ZEILEN)"
 
 ; Statuszeile
 ka_status
@@ -156,9 +180,12 @@ ka_status
 	lda ka_ebene
 	bne +
 	#text 29, KS_ART, F_STATUS, t_ka_hinten
-	bra ++
+	lda #F_AKTIV                ; Karte 1 gelb, Karte 2 tuerkis: der Wechsel
+	bra ++                      ; soll auffallen
 +	#text 29, KS_ART, F_STATUS, t_ka_vorn
-+	lda sp_m
+	lda #F_KARTE2
++	jsr ka_kopf
+	lda sp_m
 	ldx #29 * 160 + KS_TILE * 2
 	jsr w_zahl3
 	lda sp_b
@@ -196,11 +223,100 @@ t_ka_status .null " MAP 1 (behind)    TILE 000  BANK 00  FLIP --   X 00  Y 00   
 t_ka_hinten .null "(behind)"
 t_ka_vorn   .null "(front) "
 
+	.section w_luecke           ; (liegt vorn in werkstatt.asm, siehe dort)
+
+; Zeile 19: die gewaehlte Karte in Farbe A - der Text ist der Anfang der
+; Statuszeile, die schon steht -, daneben der Hinweis auf die andere Karte
+; (ohne Hinweis blau auf blau: so muss ihn niemand wegwischen)
+ka_kopf
+	.as
+	tay
+	ldx #KK_BREITE * 2 - 2
+-	lda SCHIRM + 29 * 160,x
+	sta SCHIRM + 19 * 160 + KK_SPALTE * 2,x
+	tya
+	sta SCHIRM + 19 * 160 + KK_SPALTE * 2 + 1,x
+	dex
+	dex
+	bpl -
+	ldx #19 * 160 + KH_SPALTE * 2
+	#akku16
+	lda #<>t_ka_fremd
+	ldy #`t_ka_fremd
+	jsr w_text_xy
+	.as
+	lda ka_hinweis
+	eor #F_UNSICHTBAR
+	jsr w_text
+	lda #'2'                    ; die andere Karte: 2 - ka_ebene
+	sec
+	sbc ka_ebene
+	sta SCHIRM + 19 * 160 + (KH_SPALTE + KH_Z1) * 2
+	sta SCHIRM + 19 * 160 + (KH_SPALTE + KH_Z2) * 2
+	rts
+t_ka_fremd .null "On MAP 2 - press 2"
+KH_Z1 = 7                       ; die beiden Ziffern im Text
+KH_Z2 = 17
+
+; Vor der ersten Aenderung eines Strichs (vom Klick bis zum Loslassen): den
+; Stand fuer U merken. Mit der leeren Kachel 0 ist das nicht immer der Klick
+; selbst - der kann ein gesperrtes oder leeres Feld treffen und erst das
+; Ziehen etwas leeren. Ein Strich, der nichts aendert, merkt auch nichts
+ka_strich_merken
+	.as
+	inc ka_strich
+	stz ka_hinweis
+	jmp ka_merken
+
+; Z = 1: der Stand in KA_UNDO gehoert zur gewaehlten Karte. Es gibt nur den
+; einen fuer beide Karten - U auf der anderen tauschte sonst deren Inhalt
+; gegen diesen Stand
+ka_undo_hier
+	.as
+	lda ka_ebene
+	inc a
+	cmp ka_undo_karte
+	rts
+
+; Vor dem Leeren des Feldes ka_z (Entf, oder links mit der leeren Kachel 0):
+; geleert wird nur die vorderste Kachel des Feldes - die von Karte 2, sonst
+; die von Karte 1. Was man treffen will, ist fast immer sie; den Hintergrund
+; unter einer Wand sieht man oft gar nicht, ein Loch darin auch nicht.
+; Zurueck Z = 1: sie liegt auf der gewaehlten Karte, leeren. Sonst Z = 0 und
+; A = der Hinweis (0, wenn das Feld auf beiden Karten leer ist). C bleibt.
+ka_fremd
+	.as
+	#akku16
+	lda ka_z                    ; dasselbe Feld in beiden Karten
+	and #$0fff
+	tax
+	ldy #1                      ; vorn liegt die Kachel von Karte 2 ...
+	lda @l KARTE2,x
+	and #$03ff
+	bne +
+	dey                         ; ... sonst die von Karte 1 ...
+	lda @l KARTE1,x
+	and #$03ff
+	beq _keine
++	#akku8
+	tya
+	eor ka_ebene
+	beq +
+	lda #KA_HINWEIS_AN          ; auf der anderen Karte
++	rts
+_keine
+	#akku8                      ; ... oder keine: A = 0, und Z = 0 macht
+	dey                         ; das dey
+	rts
+
+	.send
+
 ;----------------------------------------------------------------------------
 ; Je Bild: Maus und Tasten (Taste in A, 0 = keine)
 
 ka_takt
 	.as
+	jsr ka_rollen_taste         ; Pfeiltasten und der Zeiger am Rand rollen
 	cmp #0
 	beq +
 	jsr ka_taste
@@ -219,12 +335,22 @@ _links
 	lda w_mt
 	and #$01
 	beq _ende
-	lda w_mtalt                 ; gerade gedrueckt: vorher merken
-	and #$01
+	jsr ka_zeiger               ; (ka_merken laesst ka_z stehen)
+	lda w_mtalt
+	lsr a                       ; C = 1: die Taste haelt schon
+	bcs +
+	stz ka_strich               ; ein neuer Strich
++	lda sp_m                    ; eine Kachel setzen geht ueberall, mit der
+	bne _setzen                 ; leeren Kachel 0 aber nur die vorderste weg
+	jsr ka_fremd
+	bcs +                       ; der Hinweis nur beim Klick: nach dem Leeren
+	sta ka_hinweis              ; zeigte er sonst gleich auf die Kachel darunter
++	bne _ende
+_setzen
+	lda ka_strich               ; die erste Aenderung des Strichs: vorher merken
 	bne +
-	jsr ka_merken
-+	jsr ka_zeiger
-	jsr ka_eintrag
+	jsr ka_strich_merken
++	jsr ka_eintrag
 	#akku16
 	sta [ka_z]
 	#akku8
@@ -325,6 +451,9 @@ ka_eintrag
 ; die gewaehlte Karte nach KA_UNDO (vor einer Aenderung)
 ka_merken
 	.as
+	lda ka_ebene                ; (fuer U: ka_undo_hier)
+	inc a
+	sta ka_undo_karte
 	jsr ka_quelle
 	#akku16
 	lda #<>KA_UNDO
@@ -354,38 +483,32 @@ ka_quelle                       ; dz_q = Karte, dz_r = 4 KB
 ;----------------------------------------------------------------------------
 ; Tasten
 
+; Entf oder Rueckschritt: das Feld unter der Maus leeren. Die gewaehlte Kachel
+; bleibt dabei, anders als beim Aufnehmen der leeren Kachel 0 mit rechts
+ka_feld_leeren
+	.as
+	jsr ka_maus_feld            ; (ka_takt fragt die Maus erst nach der Taste)
+	lda ka_cy
+	bmi +
+	jsr ka_zeiger
+	jsr ka_fremd
+	sta ka_hinweis
+	bne +                       ; nichts zu leeren: auch nichts merken - haelt
+	jsr ka_merken               ; jemand die Taste, naehme ihre Wiederholung U
+	#akku16                     ; sonst den Stand vor dem Leeren
+	lda #0
+	sta [ka_z]
+	#akku8
++	rts
+
 ka_taste
 	.as
-	cmp #$1c                    ; Pfeile: rollen
-	bcc _keinpfeil
-	cmp #$20
-	bcs _keinpfeil
-	cmp #$1c                    ; rechts
-	bne +
-	lda ka_sx
-	cmp #64 - KA_SPALTEN
-	bcs _rollen
-	inc ka_sx
-	bra _rollen
-+	cmp #$1d                    ; links
-	bne +
-	lda ka_sx
-	beq _rollen
-	dec ka_sx
-	bra _rollen
-+	cmp #$1e                    ; hoch
-	bne +
-	lda ka_sy
-	beq _rollen
-	dec ka_sy
-	bra _rollen
-+	lda ka_sy                   ; runter
-	cmp #32 - KA_ZEILEN
-	bcs _rollen
-	inc ka_sy
-_rollen
-	jmp ka_rollen
-_keinpfeil
+	stz ka_hinweis              ; jede Taste nimmt den Hinweis weg (Entf prueft neu)
+	; (die Pfeiltasten: ka_rollen_taste, vor ka_taste gerufen)
+	cmp #$7f                    ; Entf, Rueckschritt (GETIN des Kerns)
+	beq ka_feld_leeren
+	cmp #$08
+	beq ka_feld_leeren
 	cmp #'1'
 	bne +
 	stz ka_ebene
@@ -439,6 +562,8 @@ _keinpfeil
 	sta KRAN_REG+15
 	jmp ws_starten
 +	cmp #'U'
+	bne +
+	jsr ka_undo_hier            ; nur auf der Karte, deren Stand gemerkt ist
 	bne +
 	jsr ka_quelle               ; zurueck: Karte <-> KA_UNDO ueber KA_TAUSCH
 	#akku16

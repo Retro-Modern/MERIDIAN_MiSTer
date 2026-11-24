@@ -304,12 +304,13 @@ BASIC waits for a command, **F1–F6** open the workshop and **F8** its text
 editor – F10 or Esc go back,
 and your program and screen are exactly as you left them. Everything is
 driven with the mouse and a few keys; the help lines on each tab list them.
+A click on a name in the tab bar switches tabs like its F key.
 
 | Key | Tab | |
 |---|---|---|
 | F1 | SPRITES | the 128 sprite patterns (16×16): pen, fill, flip, rotate, shift, copy, undo; preview with ink outline; **S** saves the patterns with the look as a file, **L** loads them, **B** writes them as `DATA` lines into the program |
 | F2 | TILES | 256 tiles (8×8) in the same painter, previewed side by side to check that they tile. Tile 0 stays empty – empty maps are made of it |
-| F3 | MAP | two maps of 64×32 tiles. The upper part of the screen shows the maps as PINSEL draws them (the copper switches both layers to tile mode there), the lower part the tile picker |
+| F3 | MAP | two maps of 64×32 tiles. The upper part of the screen shows the maps as PINSEL draws them (the copper switches both layers to tile mode there), the lower part the tile picker. The view scrolls with the arrow keys, or when the pointer rests at its edge (top: the tab bar, bottom: the line below the map). **1**/**2** pick the map you paint on – its name stands above the tile picker –, **Del** empties the field under the pointer |
 | F4 | SOUNDS | 64 short sounds: paint pitch and volume over 32 steps, eight waveforms, eight effects (slide, vibrato, drop, fades, arpeggios), speed and loop |
 | F5 | LOOK | your game's look: all 256 colours, which colours glow and how strongly, the ink colour and offset |
 | F6 | FONT | your own character set, in the sprite painter |
@@ -474,6 +475,29 @@ What it uses of the machine: unseen ores glimmer in the dark (PINSEL glow),
 the lamp's light cone moves with the miner (GLANZ), the status bar is text
 mode over the tile map in one frame (LOTSE), the echo sounder runs through
 the ORGEL's filter and echo, two TAKTSTOCK songs play from expansion RAM.
+
+## Games without programming: SPIELMACHER
+
+SPIELMACHER is a game construction kit on a cartridge. You paint sprites,
+tiles and maps in the workshop and say what happens with objects and rules:
+*joystick right → move the player*, *player touches a coin → remove it, add
+a point*. A game has up to 16 objects, 80 rules and 15 rooms; there are
+walls, platforms and gravity, enemies that patrol or chase, counters,
+switches, messages, scrolling maps, a title screen and music. Four templates
+(a platformer, a collecting game, a shooter and a game with several rooms)
+give you something playable to start from.
+
+The finished game is written as its own cartridge, `NAME.MOD`, that runs
+without SPIELMACHER. The part of it that comes from us may be passed on and
+sold with your game, no strings attached. From inside SPIELMACHER a game
+can also be sent to the KATALOG on retro-modern.net.
+
+SPIELMACHER is free. It needs the SDRAM module and the core from release
+20261124 on; exporting and uploading use the network service (2.5 or newer).
+
+**Download and manual:**
+[retro-modern.net/en/meridian.html#spielmacher](https://retro-modern.net/en/meridian.html#spielmacher)
+and [retro-modern.net/en/spielmacher.html](https://retro-modern.net/en/spielmacher.html).
 
 ## The HORIZONT desktop
 

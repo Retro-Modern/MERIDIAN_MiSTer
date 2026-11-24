@@ -11,10 +11,11 @@
 // geschweiften Klammern: {HOCH} {RUNTER} {LINKS} {RECHTS} {POS1} {ENTF}
 // {RUECK} {CLR} {EINFG} {ESC} {STRG1}..{STRG9}, {F1}..{F12} {TAB} {BILDHOCH}
 // {BILDRUNTER} {ENDE}, {WARTE} (eine halbe Sekunde); Vorsatz U: haelt
-// Umschalt, S: Strg, A: Alt (z. B. {U:HOCH}, {S:RECHTS}, {A:RUNTER});
+// Umschalt, S: Strg, A: Alt, M: MEGA/C= (E0 1F) (z. B. {U:HOCH}, {M:K1C});
 // Strg+Buchstabe als {STRGc} - {S:C} sendet nichts. {Kxx} sendet den
 // Scancode xx (hex) roh, unabhaengig vom Layout (auch mit U:/A:).
-// MERIDIAN_US=1 stellt die Tastatur auf US (PFORTE $0C Bit 2).
+// MERIDIAN_US=1 stellt die Tastatur auf US (PFORTE $0C Bit 2), MERIDIAN_M65=1
+// auf die MEGA65-Belegung wie am U64 (Bit 1).
 //
 // MERIDIAN_MENUE=datei.mer laedt ab Bild MERIDIAN_MENUE_AB (Standard 60)
 // wie aus dem MiSTer-Menue (ioctl, WIDE): ein Wort alle MERIDIAN_MENUE_ABSTAND
@@ -85,7 +86,7 @@
 #include <unistd.h>
 
 // Ein Tastendruck: Scancode, E0, Umschalt, Strg
-struct Taste { int code, e0, umsch, strg, alt; };
+struct Taste { int code, e0, umsch, strg, alt, mega; };
 
 static bool zeichen_taste(unsigned char c, Taste& t) {
     static const char* klein = "abcdefghijklmnopqrstuvwxyz";
@@ -142,9 +143,9 @@ static std::deque<Taste> tipp_folge(const char* text) {
         if (*p == '{') {
             const char* e = strchr(p, '}');
             std::string w(p + 1, e - p - 1);
-            int um = 0, st = 0, al = 0;         // Vorsaetze U: (Umschalt), S: (Strg), A: (Alt)
+            int um = 0, st = 0, al = 0, me = 0; // Vorsaetze U: (Umschalt), S: (Strg), A: (Alt), M: (MEGA, E0 1F)
             while (w.size() > 2 && w[1] == ':') {
-                if (w[0] == 'U') um = 1; else if (w[0] == 'S') st = 1; else if (w[0] == 'A') al = 1;
+                if (w[0] == 'U') um = 1; else if (w[0] == 'S') st = 1; else if (w[0] == 'A') al = 1; else if (w[0] == 'M') me = 1;
                 w = w.substr(2);
             }
             static const struct { const char* n; int code, e0; } fx[] = {
@@ -154,11 +155,11 @@ static std::deque<Taste> tipp_folge(const char* text) {
                 {"BILDRUNTER", 0x7A, 1}, {"ENDE", 0x69, 1}, {"RETURN", 0x5A, 0}, {"WARTE", -1, 0}};
             if (w.size() == 3 && w[0] == 'K' && isxdigit(w[1]) && isxdigit(w[2])) {
                 // {Kxx}: roher Scancode xx (hex), z. B. fuer die US-Belegung
-                t = {(int)strtol(w.c_str() + 1, nullptr, 16), 0, um, st, al};
+                t = {(int)strtol(w.c_str() + 1, nullptr, 16), 0, um, st, al, me};
                 f.push_back(t); p = e; continue;
             }
             bool gefunden = false;
-            for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st, al}; gefunden = true; }
+            for (auto& x : fx) if (w == x.n) { t = {x.code, x.e0, um, st, al, me}; gefunden = true; }
             if (gefunden) { f.push_back(t); p = e; continue; }
             t = {0, 1, 0, 0};
             if (w == "HOCH") t.code = 0x75; else if (w == "RUNTER") t.code = 0x72;
@@ -172,6 +173,7 @@ static std::deque<Taste> tipp_folge(const char* text) {
             if (um) t.umsch = 1;
             if (st) t.strg = 1;
             if (al) t.alt = 1;
+            if (me) t.mega = 1;
             f.push_back(t);
             p = e;
             continue;
@@ -433,6 +435,7 @@ int main(int argc, char** argv) {
     }
     top->layout_mac = 0;
     top->layout_us = getenv("MERIDIAN_US") ? 1 : 0;   // US-Tastatur (PFORTE $0C Bit 2)
+    top->layout_m65 = getenv("MERIDIAN_M65") ? 1 : 0; // MEGA65-/U64-Belegung (Bit 1)
     top->ioctl_download = 0;
     top->ioctl_index = getenv("MERIDIAN_MENUE_INDEX") ? atoi(getenv("MERIDIAN_MENUE_INDEX")) : 1;
     top->modul_aus = getenv("MERIDIAN_MODUL_AUS") ? 1 : 0;
@@ -499,8 +502,10 @@ int main(int argc, char** argv) {
                 if (k.umsch) { ereignisse.push_back({z, 0x12, 0, 1}); z += H / 2; }
                 if (k.strg)  { ereignisse.push_back({z, 0x14, 0, 1}); z += H / 2; }
                 if (k.alt)   { ereignisse.push_back({z, 0x11, 0, 1}); z += H / 2; }
+                if (k.mega)  { ereignisse.push_back({z, 0x1F, 1, 1}); z += H / 2; }
                 ereignisse.push_back({z, k.code, k.e0, 1}); z += H;
                 ereignisse.push_back({z, k.code, k.e0, 0}); z += H / 2;
+                if (k.mega)  { ereignisse.push_back({z, 0x1F, 1, 0}); z += H / 2; }
                 if (k.alt)   { ereignisse.push_back({z, 0x11, 0, 0}); z += H / 2; }
                 if (k.strg)  { ereignisse.push_back({z, 0x14, 0, 0}); z += H / 2; }
                 if (k.umsch) { ereignisse.push_back({z, 0x12, 0, 0}); z += H / 2; }

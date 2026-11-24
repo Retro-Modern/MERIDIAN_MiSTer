@@ -2375,7 +2375,8 @@ l_dostext
 ;  - Zeichen wie auf den MEGA65-Tasten: Umschalt+3 = #, +7 = ', +0 = {,
 ;    +: = [, +; = ], +, = <, +. = >, +/ = ?, +Pfeil links = `, = ungeschaltet, Pfund = #
 ;  - MEGA-Taste (E0 1F) als Umschalter, Bit 3 von umsch: | { } ~ \ `
-;  - ALT: ä ö ü ß, mit Umschalt Ä Ö Ü
+;  - ALT: ä ö ü ß, mit Umschalt Ä Ö Ü; ebenso mit MEGA (am U64 die C=-Taste,
+;    die MERIDIAN-Taste), weil die C64-Tastatur kein ALT hat
 ;  - Umschalt + F1/F3/.../F13 = F2/F4/.../F14 (auch fuer KEY() und die
 ;    Werkstatt); Umschalt + INST/DEL = Einfuegen, Umschalt + CRSR rechts/
 ;    runter = links/hoch
@@ -2502,8 +2503,7 @@ m65_taste                       ; MEGA: deren Liste, sonst Y, sonst die Tabelle
 	ldy #m65_l_mega-m65_listen
 	jsr m65_suche
 	bcs _ende
-	lda #0
-	rts
+	bra m65_alt_liste           ; sonst wie ALT: Umlaute (C64-Tastatur am U64 ohne ALT)
 _liste
 	jsr m65_suche
 	bcs _ende
@@ -2523,10 +2523,10 @@ m65_alt
 	.xl
 	lda PFO_LAYOUT
 	and #$06
-	bne _m65
+	bne m65_alt_liste
 	lda PFO_LAYOUT              ; nicht MEGA65: wie bisher
 	rts
-_m65
+m65_alt_liste                   ; auch fuer MEGA + Taste (aus m65_taste)
 	ldy #m65_l_alt-m65_listen
 	lda umsch
 	lsr a
@@ -2567,6 +2567,7 @@ _weiter
 	rts
 
 	.include "tastatur_m65.inc"
+	.cerror * > $FF80, "Kern-ROM voll: Code ragt in die Sprungtabelle ($FF80)"
 
 ;============================================================================
 ; Sprungtabelle (feste Adressen fuer Programme)

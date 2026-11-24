@@ -16,6 +16,8 @@
 ;   6 SCHREIBEN  Name, Versatz, Laenge         -> (Versatz 0: Datei neu)
 ;   7 ENTFERNEN  Name
 ;   8 FREI                                     -> freie Bytes (4)
+;  (18 EINTRAG mit Endung (3) nach dem Index, sonst wie 4 - stellt das ROM
+;   nicht, sondern der SPIELMACHER; Dienst ab 2.5, aeltere: -6.)
 ;  Status = Fehlernummer des DOS; antwortet der Dienst nicht: Fehler 4.
 ;  Eine MER-Datei liefert der Dienst ohne ihren Kopf (wie das DOS sonst).
 ;============================================================================

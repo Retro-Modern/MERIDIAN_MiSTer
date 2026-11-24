@@ -241,11 +241,24 @@ OUTLOC:
      "\tldy #0\n"
      "\tsta [LZ],y\t;MERIDIAN: langer Zeiger"),
 
+    # Die zweite Maske ueber M_COMBYT: steht darin PEEK oder eine
+    # MERIDIAN-Funktion, ueberschreibt die LZ - und WAIT wartete auf eine
+    # andere Adresse (gefunden 22.11.2026, SPIELMACHER 6.9).
     ("WAIT: 24-Bit-Adresse",
      "FNWAIT:\n"
-     "\tjsr GETNUM",
+     "\tjsr GETNUM\n"
+     "\tstx ANDMSK\n"
+     "\tldx #0\n"
+     "\tjsr CHRGOT\n"
+     "\tbeq ZSTORD\n"
+     "\tjsr COMBYT\t;GET MASK2.",
      "FNWAIT:\n"
-     "\tjsr M_GETNUM"),
+     "\tjsr M_GETNUM\n"
+     "\tstx ANDMSK\n"
+     "\tldx #0\n"
+     "\tjsr CHRGOT\n"
+     "\tbeq ZSTORD\n"
+     "\tjsr M_COMBYT\t;MERIDIAN: LZ bleibt"),
 
     ("WAIT: langer Zeiger",
      "WAITER:\n"
