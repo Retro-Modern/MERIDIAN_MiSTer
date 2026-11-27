@@ -92,6 +92,8 @@ PAL_BEFEHL = $FF401E            ; System-ROM (rom/palette.asm, 23.10.2026): PALE
 PAL_GEMERKT = $FF4021           ;   gemerkter Wert einer Farbe (X), Farbe zurueck,
 PAL_ZURUECK = $FF4024           ;   SHINE aus mit allen Farben
 PAL_GLANZ_AUS = $FF4027
+SCHUB_L_BEF = $FF4030           ; System-ROM (rom/schub.asm): SCHUB adr / SCHUB 0,
+SCHUB_L_FKT = $FF4033           ;   SCHUB(n[,a[,b[,c]]])
 WS_BASIC   = $FFC00C            ;   A = 0 MAP, 1 TILE, 2 TILE(), 3 Direktmodus, 4 Kaltstart
 KA_ZUSTAND = $F84300            ;   BASIC MAP: welche Karte gerade zu sehen ist
 SFX_AN     = $02F4              ;   SFX: Bit v = Stimme v spielt einen Klang ($02F5-$02FF Abspieler)

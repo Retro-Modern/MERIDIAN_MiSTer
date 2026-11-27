@@ -45,7 +45,7 @@ with open("rom/sprite_kopf.inc", "w") as f:
         f.write(f"\t.byte {len(b)}, " + ", ".join(f"${x:02x}" for x in b) + f"\t; {re.sub(r'[\x01-\x1f]', lambda m: '*+%d' % (10 * (ord(m.group()) - 1)), z)}\n")
     f.write("\t.byte 0\n")
 PY2
-( cd rom && 64tass --long-branch -b -q -o dos.bin -L dos.lst dos.asm )
+( cd rom && 64tass --long-branch -b -q -o dos.bin -L dos.lst -l dos.lbl dos.asm )
 python3 - <<'PY'
 d = open("rom/dos.bin", "rb").read()
 assert len(d) <= 16384, "DOS-ROM zu gross"
@@ -58,6 +58,19 @@ d = open("rom/werkstatt.bin", "rb").read()
 assert len(d) <= 16384, "Werkstatt-ROM zu gross"
 open("rom/werkstatt.hex", "w").write("\n".join(f"{b:02x}" for b in d + b"\xff" * (16384 - len(d))) + "\n")
 print(f"rom/werkstatt.hex: WERKSTATT {len(d)} Bytes, frei {16384 - len(d)}")
+PY
+# Adressen im System-ROM fuer EDIT (rom/edit.asm im SONG-ROM, darum danach)
+python3 - <<'PY'
+import re
+lbl = {}
+for z in open("rom/dos.lbl"):
+    m = re.match(r"^(\S+)\s*=\s*\$?([0-9a-fA-F]+)", z)
+    if m:
+        lbl[m.group(1)] = int(m.group(2), 16)
+with open("rom/dos_sym.inc", "w") as f:
+    f.write("; Automatisch erzeugt von rom/bauen.sh: Adressen im System-ROM fuer EDIT\n")
+    for n in ("ed_sortieren",):
+        f.write(f"D_{n.upper()} = ${0xff0000 | lbl[n] & 0xffff:06x}\n")
 PY
 # Adressen der Werkstatt fuer EDIT (rom/edit.asm im SONG-ROM, darum danach)
 python3 - <<'PY'

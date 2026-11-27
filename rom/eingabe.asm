@@ -54,11 +54,16 @@ f_tabelle
 	.word f_netz, f_netzzeile, f_netztext   ; 5 NET(k), 6/7 NET$(k) (Etappe 12)
 	.word f_song                            ; 8 SONG(n) (MERIDIAN 1.0)
 	.word f_kachel                          ; 9 TILE(l,x,y): Werte in P_WERT
+	.word f_schub                           ; 10 SCHUB(n[,a[,b[,c]]]): Werte und Ergebnis in P_WERT
 
 f_kachel
 	.as
 	lda #2
 	jsl WS_BASIC
+	rts
+f_schub                         ; A = 0 gut, 1 falsch, 3 Esc (System-ROM)
+	.as
+	jsl SCHUB_L_FKT
 	rts
 
 f_song                          ; SONG(n): 0 Position, 1 Zeile, 2 spielt (ROM Bank $FF)

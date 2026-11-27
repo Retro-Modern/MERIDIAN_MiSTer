@@ -23,7 +23,7 @@
 220 t=clock(0)
 230 repeat:i=i+1 and 15:for a=0 to 7:sprite 3+a,24+a*34,20+d(i+a and 15),32+a,fz:next
 240 sprite 1,248,148,8+(i and 4),fb+128:get k$:repeat:until clock(0)>=t:t=clock(0)+3
-250 until key(32) or (joy(1) and 16)
+250 until key(32) or ((joy(1) or joy(2)) and 16)
 260 rem --- spiel ---
 270 play "",1:play "",2:for a=0 to 10:sprite a:next:cls
 280 for a=1 to mn:tile 2,mx(a),my(a),40:next
@@ -33,7 +33,7 @@
 320 for a=0 to 2:sprite 23+a,262+a*18,2,27,1+256:next
 330 map 1,0,0:map 2,0,0:sfx 8,1:a=hit(0):t=clock(0):tz=t
 340 repeat
-350 j=joy(1):if key(0) then get k$:j=j or -key(28) or -2*key(29) or -8*key(30) or -16*key(32)
+350 j=joy(1) or joy(2):if key(0) then get k$:j=j or -key(28) or -2*key(29) or -8*key(30) or -16*key(32)
 360 v=0:vt=0:if j and 1 then v=s:vt=e2:vu=br:tf=ba:f=fr
 370 if j and 2 then v=-s:vt=-e2:vu=bl:tf=bb:f=fl
 380 if v then u=xt+vu:if (z(tile(2,u,yt+bc)) or z(tile(2,u,yt+bd))) and 1 then v=0:vt=0
@@ -81,7 +81,7 @@
 930 if q=2 then print "         YOU FOUND THE WAY OUT!":print:print "        ALL";mn;"PIECES OF GOLD IN";tz;"S":sfx 5,4
 940 if q=1 then print "              GAME OVER":print:print "          GOLD:";nc;"OF";mn
 950 color 12:print:print:print:print "          PRESS SPACE OR FIRE":pause 60
-960 repeat:get k$:until key(32) or (joy(1) and 16):goto 100
+960 repeat:get k$:until key(32) or ((joy(1) or joy(2)) and 16):goto 100
 9000 data 30,2,11,3,11,4,11,18,11,19,11,57,11,58,11,53
 9010 data 14,54,14,3,17,4,17,5,17,28,17,33,17,47,17,48
 9020 data 17,49,17,30,19,31,19,10,20,11,20,12,20,42,20,43

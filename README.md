@@ -352,9 +352,11 @@ file format and the details.
 **F8** opens the BASIC program in memory as plain text: scroll through it,
 change any line, insert and delete lines anywhere. When you leave the
 workshop (F10 or Esc), the changed text replaces the program, as if every
-line had been typed in, followed by `CLR`. Lines need their numbers, and
-the numbers must go up; if a line is wrong, the editor stays open, puts the
-cursor on it and says why. Keywords may be typed in small letters.
+line had been typed in, followed by `CLR`. Lines need their numbers; they
+may come in any order and are put in order, and a line replaces an earlier
+one with the same number, as when typing them. If a line is wrong, the
+editor stays open, puts the cursor on it and says why. Keywords may be
+typed in small letters.
 
 It also edits text files on drives 1–3 (drive 3 is the folder
 `games/MERIDIAN/files`, so a file saved there can be opened on a PC as
@@ -377,6 +379,12 @@ of the SONG ROM (`rom/edit.asm`, jump table at `$FF:BFF0`); its text and
 state live in expansion RAM banks `$E4–$E6` and stay there between visits.
 
 EDIT was contributed by James Gill ([jnngill](https://github.com/jnngill)).
+So were BASIC's `BRUN "name"` (load a program file, run it and carry on in
+BASIC) and `SCHUB` (start the RISC-V co-processor and call its functions
+from BASIC; it does something only on the SCHUB core) – see
+[BASIC.md](BASIC.md). His [MERIDIAN Pascal](https://github.com/jnngill/MeridianPascal)
+compiles Pascal for the 65C816 and for SCHUB, on a PC or on the MERIDIAN
+itself, and its programs start with `BRUN`.
 
 ![The workshop: MAP](Screens/Workshop_MAP.png)
 
@@ -580,6 +588,9 @@ the forum at [forum.retro-modern.net](https://forum.retro-modern.net), category
   (`basic/quelle/`).
 - **MiSTer framework** (`sys/`): GPL-2.0.
 - Sound samples in the demos were made with ElevenLabs.
+- **EDIT, `BRUN` and `SCHUB` in BASIC** (`rom/edit.asm`, `rom/ed_sort.asm`,
+  `rom/brun.asm`, `rom/schub.asm`): contributed by **James Gill**
+  ([jnngill](https://github.com/jnngill)) under the core's license.
 - **MERIDIAN 816:** © 2026 [retro-modern.net](https://retro-modern.net).
   GPL-3.0-or-later, see [LICENSE](LICENSE).
 - **TIEFGANG** (`extras/TIEFGANG.MOD`): © 2026

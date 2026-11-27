@@ -18,9 +18,10 @@ programs in `programme/` (and on the demo disk) are longer examples.
 - [Input](#input) – `KEY()` `JOY()` `MOUSE` `MOUSE()` `GET`
 - [Time](#time) – `PAUSE` `CLOCK()`
 - [Program flow](#program-flow) – `IF … ELSE` `WHILE … WEND` `REPEAT … UNTIL` `RENUMBER`
-- [Drives and files](#drives-and-files) – `DRIVE` `DIR` `SAVE` `LOAD` `BSAVE` `BLOAD` `SCRATCH` `HEADER`
+- [Drives and files](#drives-and-files) – `DRIVE` `DIR` `SAVE` `LOAD` `BSAVE` `BLOAD` `BRUN` `SCRATCH` `HEADER`
 - [Network](#network) – `NET` `NET()` `NET$()`
 - [Memory and machine code](#memory-and-machine-code) – `PEEK` `POKE` `WAIT` `FRE` `USR` `MONITOR`
+- [SCHUB](#schub) – `SCHUB` `SCHUB()` (RISC-V co-processor, SCHUB core only)
 - [Error messages](#error-messages)
 - [All MERIDIAN words at a glance](#all-meridian-words-at-a-glance)
 
@@ -595,6 +596,27 @@ take 24-bit addresses. Saving and loading the whole bitmap:
 50 BLOAD "PICTURE":PAUSE 120:GRAPHIC 0
 ```
 
+### BRUN "name"[,drive]
+
+Loads a program file (`NAME.MER`) to the load address in its header and
+starts it there (JSL; the program ends with RTL), then carries on in BASIC –
+at `READY.`, or with the next statement when `BRUN` is in a program.
+The program may use all of bank 0 from `$2000`, even over BASIC's own
+code: `BRUN` keeps bank 0 `$2000–$BFFF`, BASIC's direct page and page 3 in
+bank `$E7` of the expansion memory while it runs and puts them back
+afterwards. Then, as after a remote start, only the frame interrupt is on,
+PFORTE's timers are off and the display is reset to text (without clearing
+it); the program itself is not in memory any more. It needs the SDRAM module.
+Programs from MERIDIAN Pascal (the PC compiler, or `F7` in the PASCAL
+cartridge) work this way, for the 65C816 and for SCHUB.
+
+```basic
+BRUN "PRIMES"
+BRUN "SNAKE",3
+10 PRINT "LOADING ..."
+20 BRUN "GAME":PRINT "BACK IN BASIC"
+```
+
 ### SCRATCH "name"[,drive]
 
 Deletes a file (ending `.BAS` when none is given): `SCRATCH
@@ -690,6 +712,41 @@ computer and `tools/senden.py` (README), or `BLOAD` them.
 The machine-code monitor with assembler, disassembler and single step
 (README). `X` goes back to BASIC.
 
+## SCHUB
+
+Only in the SCHUB core: the RISC-V co-processor (see `SCHUB.md`). BASIC
+loads a RISC-V program with `BLOAD`, starts it with `SCHUB` and calls its
+functions with `SCHUB()`. Programs that use these words do not run on the
+original MERIDIAN 816. They need the expansion memory (SDRAM).
+
+### SCHUB adr / SCHUB 0
+
+`SCHUB adr` stops SCHUB, sets the start address `adr` (divisible by 4),
+clears the mailbox and starts the RISC-V program there. It also switches
+SCHUB on when it is off in the MiSTer menu. `SCHUB 0` stops SCHUB and
+switches it off (the menu shows Off again).
+
+### SCHUB(n[,a[,b[,c]]]) / SCHUB(-1)
+
+Calls function `n` (0–8 388 607) of the running RISC-V program with up to
+three values (−8 388 608…8 388 607, missing ones are 0) and waits for its
+answer, a 32-bit number with sign. `Esc` stops the wait with `BREAK`.
+`?ILLEGAL QUANTITY` means SCHUB is not running or has had an address error.
+`SCHUB(-1)` returns the status byte (`$CD09`): bit 7 present, 3 address
+error, 2 bus busy, 1 running, 0 on.
+
+`programme/schubdemo.bas` with `RVDEMO.MER` (built by `tools/schubdemo.py`)
+has three functions: 0 multiplies, 1 counts primes, 2 fills the screen.
+
+```basic
+10 BLOAD "RVDEMO":SCHUB 262144
+20 PRINT SCHUB(0,4321,1234)
+30 PRINT SCHUB(1,20000);"PRIMES BELOW 20000"
+40 SCHUB 0
+```
+
+How a RISC-V program answers is in `SCHUB.md` ("SCHUB from BASIC").
+
 ## Error messages
 
 Besides Microsoft's messages, MERIDIAN BASIC knows: `?FILE NOT FOUND`,
@@ -705,6 +762,7 @@ Besides Microsoft's messages, MERIDIAN BASIC knows: `?FILE NOT FOUND`,
 |---|---|---|---|
 | `BLIT` | copy memory | `MODE` | 40 or 80 columns |
 | `BLOAD` | load a file into memory | `MONITOR` | machine-code monitor |
+| `BRUN` | load and start a program file | | |
 | `BSAVE` | save memory as a file | `MOUSE` / `MOUSE()` | pointer on/off / position, buttons |
 | `CLOCK()` | clock and frame counter | `NET` / `NET()` / `NET$()` | network |
 | `CLS` | clear the text screen | `PALETTE` | mix a colour |
@@ -723,7 +781,7 @@ Besides Microsoft's messages, MERIDIAN BASIC knows: `?FILE NOT FOUND`,
 | `LINE` | draw a line | `SOUND` | a note |
 | `LOOK` | workshop look | `SPRITE` | show and move a sprite |
 | `MAP` | show a workshop map | `STAMP` | put a picture into the bitmap |
-| | | `TILE` / `TILE()` | set / read a map cell |
+| `SCHUB` / `SCHUB()` | start / call RISC-V (SCHUB core) | `TILE` / `TILE()` | set / read a map cell |
 | | | `WHILE` … `WEND` | loop |
 
 `LOAD`, `SAVE`, `PEEK`, `POKE`, `WAIT` and `FRE` are Microsoft's, with the

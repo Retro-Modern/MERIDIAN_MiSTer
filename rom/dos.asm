@@ -159,6 +159,13 @@ ldx8	.macro adr                 ; X = Byte (16 Bit, obere Haelfte 0); Akku danac
 ws_rollen_ein
 	jmp ws_rollen               ; $FF:402A Werkstatt, MAP: Karte rollen, Pfeile und Mausrand (rom/ws_rollen.asm)
 	.cerror ws_rollen_ein != $402A, "ws_rollen: die Werkstatt ruft $FF:402A (ROLL_RUF in ws_karte.asm)"
+brun_ein
+	jmp brun_befehl             ; $FF:402D BRUN "name"[,laufwerk] (rom/brun.asm)
+	.cerror brun_ein != $402D, "BRUN: BASIC ruft $FF:402D (SYS_BRUN in basic/meridian.s)"
+schub_ein
+	jmp schub_befehl            ; $FF:4030 SCHUB adr / SCHUB 0 (rom/schub.asm)
+	jmp schub_funktion          ; $FF:4033   SCHUB(n[,a[,b[,c]]])
+	.cerror schub_ein != $4030, "SCHUB: der Kern ruft $FF:4030 (SCHUB_L_BEF in kern.asm)"
 
 dos_befehl
 	.as
@@ -2079,6 +2086,9 @@ P_TPTR_M   = $039D
 	.include "spritedata.asm"
 	.include "palette.asm"
 	.include "ws_rollen.asm"
+	.include "brun.asm"
+	.include "schub.asm"
+	.include "ed_sort.asm"
 
 	.cerror * > $7F00, "DOS-ROM zu gross (ab $7F00 liegt die US-Tastatur)"
 

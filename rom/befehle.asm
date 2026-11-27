@@ -73,6 +73,7 @@ b_tabelle
 	.word karte_befehl, kachel_befehl              ; 24 MAP, 25 TILE (Werkstatt-ROM)
 	.word klang_befehl, look_befehl                ; 26 SFX, 27 LOOK (Werkstatt-ROM)
 	.word palette_befehl                           ; 28 PALETTE (System-ROM, 23.10.2026)
+	.word schub_befehl                             ; 29 SCHUB (System-ROM, rom/schub.asm)
 
 ; MAP l[,x,y] und TILE l,x,y,t[,f]: die Arbeit macht das Werkstatt-ROM
 karte_befehl
@@ -98,6 +99,10 @@ look_befehl                     ; LOOK [n]
 palette_befehl                  ; PALETTE n,r,g,b: setzen und merken
 	.as
 	jsl PAL_BEFEHL
+	rts
+schub_befehl                    ; SCHUB adr / SCHUB 0
+	.as
+	jsl SCHUB_L_BEF
 	rts
 
 ; SONG "name"[,laufwerk]: TAKTSTOCK-Song laden und im Hintergrund spielen

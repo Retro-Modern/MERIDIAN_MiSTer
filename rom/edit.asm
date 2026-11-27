@@ -20,6 +20,10 @@
 ;    BASIC FILE  a program file (tokenized), listed as text and saved
 ;                tokenized again
 ;  Text to program works like tools/bas.py and Microsoft's CRUNCH:
+;  the lines may come in any order; they are put in order by their numbers,
+;  and a line replaces an earlier one with the same number, as when typing
+;  them (rom/ed_sort.asm in the system ROM).
+;
 ;  keywords are found anywhere outside quotes, REM and DATA, "?" is PRINT,
 ;  an ELSE gets a ":" in front if it has none.
 ;
@@ -39,6 +43,7 @@
 
 	.include "kern_sym.inc"     ; K_L_GETIN
 	.include "ws_sym.inc"       ; W_W_MX ... W_SD_FEHLERTEXTE (rom/bauen.sh)
+	.include "dos_sym.inc"      ; D_ED_SORTIEREN (rom/bauen.sh)
 	.include "basic_sym.inc"    ; B_TXTTAB ..., B_RESLST, B_REMTK ...
 
 ED_SPRUNG     = $FFBFF0            ; jump table (see werkstatt.asm, ED_ZEICHNEN)
@@ -2784,7 +2789,6 @@ ed_crunch
 	.as
 	#akku16
 	stz e_aus
-	stz e_hat
 	#akku8
 	stz e_ueber
 	lda #`ED_BUF
@@ -2868,19 +2872,7 @@ _nr_da
 	bcc +
 	lda #<>t_ed_nr_hoch
 	jmp _fehler
-+	ldy e_hat                   ; going up
-	beq _ok
-	cmp e_letzte
-	beq _reihe
-	bcs _ok
-_reihe
-	lda #<>t_ed_reihe
-	jmp _fehler
-_ok
-	sta e_letzte
-	lda #1
-	sta e_hat
-	#akku8
++	#akku8
 	cpx e_rend                  ; one space after the number belongs to it
 	bcs +
 	lda @l ED_BUF,x
@@ -2938,6 +2930,12 @@ _ende
 	jsr ed_aus_byte
 	lda e_ueber
 	bne +
+	#akku16                     ; the lines in order, like typing them
+	lda e_basis                 ; (D_ED_SORTIEREN, rom/ed_sort.asm)
+	jsr D_ED_SORTIEREN
+	#akku16
+	sta e_aus
+	#akku8
 	clc
 	rts
 +	#akku16
@@ -3157,7 +3155,6 @@ t_ed_ablage_leer .null "Clipboard empty: ^X cuts a line, ^C copies it"
 t_ed_kopiert .null "Line copied: ^V pastes it"
 t_ed_keine_nr .null "This line needs a line number"
 t_ed_nr_hoch .null "Line numbers go up to 63999"
-t_ed_reihe  .null "Line numbers must go up"
 t_ed_zu_lang .null "Line too long for BASIC (250 bytes)"
 t_ed_basic_voll .null "The program is too big for BASIC memory"
 
